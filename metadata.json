@@ -1,0 +1,6 @@
+{
+  "name": "E-Commerce Store",
+  "description": "A clean, modern, responsive e-commerce web application with category filtering, search, cart, checkout, user profile, and order management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

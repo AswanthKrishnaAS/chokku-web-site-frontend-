@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Raleway', sans-serif;
+  --color-brand-green: #64A901;
+  --color-brand-green-hover: #548f01;
+  --color-brand-blue: #01589D;
+  --color-brand-blue-hover: #01457c;
+  --color-brand-light-green: #f3f9eb;
+  --color-brand-light-blue: #eef5fb;
+}
+
+@layer base {
+  * {
+    font-family: 'Raleway', sans-serif;
+  }
+  body {
+    background-color: #ffffff;
+    color: #1f2937;
+    font-family: 'Raleway', sans-serif;
+  }
+}
