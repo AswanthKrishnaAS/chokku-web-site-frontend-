@@ -10,6 +10,8 @@ import { Button } from '../components/Button';
 import { useToast } from '../context/ToastContext';
 import { TreasureCoin } from '../components/TreasureCoin';
 
+import { useAuth } from '../context/AuthContext';
+
 export const ProductDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -17,6 +19,7 @@ export const ProductDetails: React.FC = () => {
   const { addToCart } = useCart();
   const { toggleWishlist, isInWishlist } = useWishlist();
   const { addToast } = useToast();
+  const { customerUser } = useAuth();
 
   const allProducts = storeProducts.length > 0 ? storeProducts : PRODUCTS;
   const product = allProducts.find((p) => p.id === id);
@@ -32,6 +35,20 @@ export const ProductDetails: React.FC = () => {
       setQuantity(1);
     }
   }, [product]);
+
+  // Auto-resume Buy Now checkout if returning after Login/Signup
+  React.useEffect(() => {
+    if (!product || !customerUser) return;
+    const searchParams = new URLSearchParams(window.location.search);
+    const isAutoBuy = searchParams.get('autoBuy') === 'true';
+
+    if (isAutoBuy) {
+      window.history.replaceState({}, '', window.location.pathname);
+      addToCart(product, quantity);
+      addToast('Continuing Checkout', `Resuming purchase for ${product.name}`, 'success');
+      navigate('/checkout');
+    }
+  }, [customerUser, product]);
 
   if (!product) {
     return (
@@ -53,6 +70,21 @@ export const ProductDetails: React.FC = () => {
   ).slice(0, 4);
 
   const handleBuyNow = () => {
+    if (!customerUser) {
+      addToast('Login Required', 'Please log in or sign up to complete your purchase.', 'info');
+      sessionStorage.setItem('chokku_redirect_after_login', `/product/${product.id}?autoBuy=true`);
+      sessionStorage.setItem('chokku_buy_now_product_id', product.id);
+      sessionStorage.setItem('chokku_buy_now_qty', String(quantity));
+      navigate('/login', {
+        state: {
+          returnUrl: `/product/${product.id}?autoBuy=true`,
+          buyNowProductId: product.id,
+          buyNowQuantity: quantity,
+        },
+      });
+      return;
+    }
+
     addToCart(product, quantity);
     navigate('/checkout');
   };

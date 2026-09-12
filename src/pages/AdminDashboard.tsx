@@ -38,14 +38,15 @@ import {
   Gift,
   ChevronDown,
   Zap,
-  Trophy
+  Trophy,
+  MapPin
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useWebsiteSettings, HomeSlideItem } from '../context/WebsiteSettingsContext';
 import { useCategories } from '../context/CategoryContext';
 import { useProducts } from '../context/ProductContext';
 import { useToast } from '../context/ToastContext';
-import { useGameSettings } from '../context/GameSettingsContext';
+import { useGameSettings, GiftBoxRewardConfig } from '../context/GameSettingsContext';
 import { PRODUCTS } from '../data/products';
 import { CATEGORIES } from '../data/categories';
 import { Product, Order } from '../types';
@@ -339,6 +340,9 @@ export const AdminDashboard: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Selected Order for viewing complete Razorpay payment and delivery details modal
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState<Order | null>(null);
+
   // Real-time WebSocket Notification listeners for instant order & customer alerts
   React.useEffect(() => {
     const handleSocketOrder = (newOrd: Order) => {
@@ -353,11 +357,30 @@ export const AdminDashboard: React.FC = () => {
       };
       setAdminNotifications((prev) => [newNotif, ...prev]);
       setAdminOrders((prev) => {
-        if (prev.some((o) => o.id === newOrd.id)) return prev;
+        const idx = prev.findIndex((o) => o.id === newOrd.id || (newOrd.razorpayOrderId && o.razorpayOrderId === newOrd.razorpayOrderId));
+        if (idx !== -1) {
+          const updated = [...prev];
+          updated[idx] = { ...updated[idx], ...newOrd };
+          return updated;
+        }
         return [newOrd, ...prev];
       });
       playNotificationSound();
       addToast('New Order Received!', `Order #${newOrd.id} placed for ₹${newOrd.totalAmount.toFixed(2)}`, 'success');
+    };
+
+    const handleSocketPaymentUpdate = (updatedOrd: Order) => {
+      setAdminOrders((prev) => {
+        const idx = prev.findIndex((o) => o.id === updatedOrd.id || (updatedOrd.razorpayOrderId && o.razorpayOrderId === updatedOrd.razorpayOrderId));
+        if (idx !== -1) {
+          const list = [...prev];
+          list[idx] = { ...list[idx], ...updatedOrd };
+          return list;
+        }
+        return [updatedOrd, ...prev];
+      });
+      playNotificationSound();
+      addToast('Razorpay Payment Recorded!', `Payment of ₹${updatedOrd.totalAmount.toFixed(2)} recorded for Order ${updatedOrd.id}`, 'success');
     };
 
     const handleSocketCustomer = (newCust: any) => {
@@ -380,12 +403,32 @@ export const AdminDashboard: React.FC = () => {
     };
 
     socket.on('admin_new_order', handleSocketOrder);
+    socket.on('admin_payment_update', handleSocketPaymentUpdate);
     socket.on('admin_new_customer', handleSocketCustomer);
 
     return () => {
       socket.off('admin_new_order', handleSocketOrder);
+      socket.off('admin_payment_update', handleSocketPaymentUpdate);
       socket.off('admin_new_customer', handleSocketCustomer);
     };
+  }, []);
+
+  // Fetch admin orders from MongoDB backend API
+  React.useEffect(() => {
+    const fetchAdminOrders = async () => {
+      try {
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        const res = await fetch(`${API_URL}/orders/admin/all`);
+        const data = await res.json();
+        if (res.ok && data.success && Array.isArray(data.orders)) {
+          setAdminOrders(data.orders);
+          localStorage.setItem('chokku_all_orders', JSON.stringify(data.orders));
+        }
+      } catch (err) {
+        console.warn('Could not fetch admin orders from API:', err);
+      }
+    };
+    fetchAdminOrders();
   }, []);
 
   const handleTestNotification = () => {
@@ -1722,13 +1765,14 @@ export const AdminDashboard: React.FC = () => {
                       <th className="py-3 px-4">Total Amount</th>
                       <th className="py-3 px-4">Payment Method</th>
                       <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 text-center">Payment & Order Info</th>
                       <th className="py-3 px-4 text-right">Update Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 font-semibold text-gray-800">
                     {filteredOrders.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-12 text-center text-gray-400 font-medium">
+                        <td colSpan={7} className="py-12 text-center text-gray-400 font-medium">
                           No orders found in fulfillment manager.
                         </td>
                       </tr>
@@ -1737,11 +1781,11 @@ export const AdminDashboard: React.FC = () => {
                         <tr key={order.id} className="hover:bg-gray-50/80">
                           <td className="py-3.5 px-4 font-extrabold text-[#488710]">{order.id}</td>
                           <td className="py-3.5 px-4">
-                            <p className="font-bold text-gray-900">{order.shippingAddress.fullName}</p>
-                            <p className="text-[11px] text-gray-500">{order.shippingAddress.phone}</p>
+                            <p className="font-bold text-gray-900">{order.shippingAddress?.fullName || order.customerInfo?.name}</p>
+                            <p className="text-[11px] text-gray-500">{order.shippingAddress?.phone || order.customerInfo?.phone}</p>
                           </td>
                           <td className="py-3.5 px-4 font-bold text-gray-900">₹{order.totalAmount.toFixed(2)}</td>
-                          <td className="py-3.5 px-4 text-gray-600">{order.paymentMethod}</td>
+                          <td className="py-3.5 px-4 text-gray-600 font-medium">{order.paymentMethod}</td>
                           <td className="py-3.5 px-4">
                             <span
                               className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${
@@ -1756,6 +1800,15 @@ export const AdminDashboard: React.FC = () => {
                             >
                               {order.status}
                             </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <button
+                              onClick={() => setSelectedOrderDetail(order)}
+                              className="px-3 py-1.5 bg-[#f0f9e8] hover:bg-[#e4f4d6] text-[#488710] border border-[#d2ea9d] rounded-xl text-xs font-black transition-colors cursor-pointer inline-flex items-center gap-1"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span>View Complete Details</span>
+                            </button>
                           </td>
                           <td className="py-3.5 px-4 text-right">
                             <select
@@ -1938,48 +1991,78 @@ export const AdminDashboard: React.FC = () => {
           {/* ================= SECTION 6: PAYMENTS ================= */}
           {activeSection === 'payments' && (
             <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-2xs space-y-4">
-              <div className="border-b border-gray-100 pb-4">
-                <h3 className="text-base font-extrabold text-gray-900">Payment Transactions</h3>
-                <p className="text-xs text-gray-500">Track customer payments and gateway transactions.</p>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                <div>
+                  <h3 className="text-base font-extrabold text-gray-900">Razorpay Payment Transactions</h3>
+                  <p className="text-xs text-gray-500">Real-time accurate record of Razorpay online payments & customer transaction details.</p>
+                </div>
+                <div className="flex items-center gap-2 bg-[#f0f9e8] text-[#488710] px-3.5 py-1.5 rounded-2xl border border-[#d2ea9d] text-xs font-bold">
+                  <Sparkles className="w-4 h-4" />
+                  <span>Real-Time Razorpay Sync Active</span>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wider font-extrabold">
-                      <th className="py-3 px-4">Transaction ID</th>
-                      <th className="py-3 px-4">Order Ref</th>
-                      <th className="py-3 px-4">Customer</th>
-                      <th className="py-3 px-4">Method</th>
-                      <th className="py-3 px-4">Amount</th>
-                      <th className="py-3 px-4 text-right">Status</th>
+                      <th className="py-3 px-4">Razorpay Payment ID</th>
+                      <th className="py-3 px-4">Order ID</th>
+                      <th className="py-3 px-4">Customer Details</th>
+                      <th className="py-3 px-4">Products Purchased</th>
+                      <th className="py-3 px-4">Payment Method</th>
+                      <th className="py-3 px-4">Total Amount Paid</th>
+                      <th className="py-3 px-4">Date & Time</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                      <th className="py-3 px-4 text-right">Details</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 font-semibold text-gray-800">
                     {paymentsList.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-12 text-center text-gray-400 font-medium">
+                        <td colSpan={9} className="py-12 text-center text-gray-400 font-medium">
                           No payment transactions recorded yet.
                         </td>
                       </tr>
                     ) : (
                       paymentsList.map((pay) => (
                         <tr key={pay.id} className="hover:bg-gray-50/80">
-                          <td className="py-3.5 px-4 font-bold text-gray-900">{pay.id}</td>
+                          <td className="py-3.5 px-4 font-mono font-bold text-gray-900">{pay.razorpayPaymentId}</td>
                           <td className="py-3.5 px-4 text-[#488710] font-extrabold">{pay.orderId}</td>
-                          <td className="py-3.5 px-4 text-gray-700">{pay.customer}</td>
-                          <td className="py-3.5 px-4 text-gray-600">{pay.method}</td>
-                          <td className="py-3.5 px-4 font-black text-gray-900">{pay.amount}</td>
-                          <td className="py-3.5 px-4 text-right">
+                          <td className="py-3.5 px-4">
+                            <p className="font-bold text-gray-900">{pay.customer}</p>
+                            <p className="text-[11px] text-gray-500">{pay.customerPhone} {pay.customerEmail ? `• ${pay.customerEmail}` : ''}</p>
+                          </td>
+                          <td className="py-3.5 px-4 text-gray-700 max-w-xs truncate">
+                            {pay.fullOrder?.items?.map((it: any) => `${it.title} (x${it.quantity})`).join(', ') || 'Item'}
+                          </td>
+                          <td className="py-3.5 px-4 text-[#488710] font-extrabold">{pay.method}</td>
+                          <td className="py-3.5 px-4 font-black text-gray-900 text-sm">{pay.amount}</td>
+                          <td className="py-3.5 px-4 text-gray-600">
+                            <p className="font-bold text-gray-900">{pay.date}</p>
+                            <p className="text-[11px] text-gray-400">{pay.time}</p>
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
                             <span
                               className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${
                                 pay.status === 'Successful'
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : pay.status === 'COD'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200'
                               }`}
                             >
                               {pay.status}
                             </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <button
+                              onClick={() => setSelectedOrderDetail(pay.fullOrder)}
+                              className="px-3 py-1.5 bg-[#f0f9e8] hover:bg-[#e4f4d6] text-[#488710] border border-[#d2ea9d] rounded-xl text-xs font-black transition-colors cursor-pointer inline-flex items-center gap-1"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span>View Details</span>
+                            </button>
                           </td>
                         </tr>
                       ))
@@ -3508,6 +3591,153 @@ export const AdminDashboard: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= ORDER & PAYMENTS COMPLETE DETAILS MODAL ================= */}
+      {selectedOrderDetail && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 space-y-6 max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-100">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Order & Razorpay Payment Record</span>
+                <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
+                  <span>Order {selectedOrderDetail.id}</span>
+                  <span className={`text-xs px-3 py-1 rounded-full font-extrabold border ${
+                    selectedOrderDetail.paymentStatus === 'paid'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : selectedOrderDetail.paymentMethod?.includes('Cash')
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-rose-50 text-rose-700 border-rose-200'
+                  }`}>
+                    {selectedOrderDetail.paymentStatus === 'paid' ? 'SUCCESSFUL (PAID)' : selectedOrderDetail.paymentMethod?.includes('Cash') ? 'CASH ON DELIVERY' : 'PENDING'}
+                  </span>
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedOrderDetail(null)}
+                className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Grid 1: Customer Details & Delivery Address */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              {/* Customer Details Box */}
+              <div className="bg-gray-50/80 p-4 rounded-2xl border border-gray-200/80 space-y-2">
+                <h4 className="font-black text-gray-900 text-xs uppercase tracking-wider flex items-center gap-1.5 text-[#488710]">
+                  <Users className="w-4 h-4" /> Customer Details
+                </h4>
+                <div className="space-y-1 text-gray-700 font-medium">
+                  <p><span className="text-gray-400 font-bold">Name:</span> <strong className="text-gray-900">{selectedOrderDetail.shippingAddress?.fullName || selectedOrderDetail.customerInfo?.name || 'N/A'}</strong></p>
+                  <p><span className="text-gray-400 font-bold">Phone:</span> {selectedOrderDetail.shippingAddress?.phone || selectedOrderDetail.customerInfo?.phone || 'N/A'}</p>
+                  <p><span className="text-gray-400 font-bold">Email:</span> {selectedOrderDetail.shippingAddress?.email || selectedOrderDetail.customerInfo?.email || 'N/A'}</p>
+                  {selectedOrderDetail.customerInfo?.username && (
+                    <p><span className="text-gray-400 font-bold">Username:</span> @{selectedOrderDetail.customerInfo.username}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Delivery Address Box */}
+              <div className="bg-gray-50/80 p-4 rounded-2xl border border-gray-200/80 space-y-2">
+                <h4 className="font-black text-gray-900 text-xs uppercase tracking-wider flex items-center gap-1.5 text-[#488710]">
+                  <MapPin className="w-4 h-4" /> Delivery Address
+                </h4>
+                <div className="space-y-1 text-gray-700 font-medium">
+                  <p className="font-bold text-gray-900">{selectedOrderDetail.shippingAddress?.fullName}</p>
+                  <p>{selectedOrderDetail.shippingAddress?.address}</p>
+                  <p>{[selectedOrderDetail.shippingAddress?.city, selectedOrderDetail.shippingAddress?.state].filter(Boolean).join(', ')} - <strong>{selectedOrderDetail.shippingAddress?.pincode}</strong></p>
+                  <p className="text-gray-500">Contact: {selectedOrderDetail.shippingAddress?.phone}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Product Purchased Table */}
+            <div className="space-y-2">
+              <h4 className="font-black text-gray-900 text-xs uppercase tracking-wider flex items-center gap-1.5 text-[#488710]">
+                <ShoppingBag className="w-4 h-4" /> Purchased Products ({selectedOrderDetail.items?.length || 0})
+              </h4>
+              <div className="border border-gray-200 rounded-2xl overflow-hidden">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-gray-50 text-gray-400 font-extrabold uppercase tracking-wider border-b border-gray-200">
+                    <tr>
+                      <th className="py-2.5 px-3">Product</th>
+                      <th className="py-2.5 px-3">Category/Weight</th>
+                      <th className="py-2.5 px-3 text-center">Qty</th>
+                      <th className="py-2.5 px-3 text-right">Price</th>
+                      <th className="py-2.5 px-3 text-right">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 font-medium text-gray-800">
+                    {selectedOrderDetail.items?.map((item: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-gray-50/50">
+                        <td className="py-2.5 px-3 flex items-center gap-2 font-bold text-gray-900">
+                          {(item.image || item.product?.image) && (
+                            <img src={item.image || item.product?.image} alt={item.title || item.product?.name} className="w-8 h-8 object-cover rounded-lg border border-gray-200 shrink-0" />
+                          )}
+                          <span>{item.title || item.product?.name}</span>
+                        </td>
+                        <td className="py-2.5 px-3 text-gray-500">{item.weight || item.product?.weight || item.category || 'Standard'}</td>
+                        <td className="py-2.5 px-3 text-center font-bold">{item.quantity}</td>
+                        <td className="py-2.5 px-3 text-right text-gray-600">₹{(item.price || item.product?.price || 0).toFixed(2)}</td>
+                        <td className="py-2.5 px-3 text-right font-extrabold text-gray-900">₹{((item.price || item.product?.price || 0) * item.quantity).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Razorpay Transaction Details & Audit Trail */}
+            <div className="bg-[#f0f9e8]/60 border border-[#d2ea9d] p-4 rounded-2xl space-y-3">
+              <h4 className="font-black text-gray-900 text-xs uppercase tracking-wider flex items-center gap-1.5 text-[#488710]">
+                <CreditCard className="w-4 h-4" /> Razorpay Transaction Details
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <p className="text-[11px] text-gray-500 font-bold">Razorpay Payment ID</p>
+                  <p className="font-mono font-bold text-gray-900">{selectedOrderDetail.razorpayPaymentId || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-500 font-bold">Razorpay Order ID</p>
+                  <p className="font-mono font-bold text-gray-900">{selectedOrderDetail.razorpayOrderId || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-500 font-bold">Payment Method Used</p>
+                  <p className="font-bold text-[#488710]">{selectedOrderDetail.paymentMethod}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-500 font-bold">Payment Status</p>
+                  <p className="font-bold text-gray-900 uppercase">{selectedOrderDetail.paymentStatus || 'paid'}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-500 font-bold">Payment Date</p>
+                  <p className="font-bold text-gray-900">{selectedOrderDetail.paymentDate || selectedOrderDetail.date}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-500 font-bold">Payment Time</p>
+                  <p className="font-bold text-gray-900">{selectedOrderDetail.paymentTime || 'N/A'}</p>
+                </div>
+              </div>
+
+              {/* Amount Calculation Row */}
+              <div className="pt-3 border-t border-[#d2ea9d] flex items-center justify-between font-extrabold text-sm text-gray-900">
+                <span>Total Amount Paid via Gateway:</span>
+                <span className="text-base text-[#488710] font-black">₹{selectedOrderDetail.totalAmount?.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setSelectedOrderDetail(null)}
+                className="px-5 py-2.5 bg-[#488710] hover:bg-[#386b0c] text-white font-bold rounded-2xl text-xs transition-colors cursor-pointer"
+              >
+                Close Details
+              </button>
+            </div>
           </div>
         </div>
       )}

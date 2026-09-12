@@ -59,8 +59,8 @@ export const Profile: React.FC = () => {
     );
   }
 
-  const displayName = user.username || user.name || 'nandu';
-  const displayEmail = user.email || `${displayName.toLowerCase()}@chokku.store`;
+  const displayName = user.username || user.name || 'Customer';
+  const displayEmail = user.email || '';
   const displayPhone = user.phone || '+91 576567564564';
   const initialLetter = displayName.charAt(0).toUpperCase();
 

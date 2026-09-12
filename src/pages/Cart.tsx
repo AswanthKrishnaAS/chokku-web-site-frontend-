@@ -2,11 +2,15 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingBag, ArrowRight, Tag, ShieldCheck, ArrowLeft, Trash2, CheckCircle } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { CartItem } from '../components/CartItem';
 import { Button } from '../components/Button';
 import { TreasureCoin } from '../components/TreasureCoin';
 
 export const Cart: React.FC = () => {
+  const { customerUser } = useAuth();
+  const { addToast } = useToast();
   const {
     cartItems,
     clearCart,
@@ -22,6 +26,16 @@ export const Cart: React.FC = () => {
 
   const [inputCode, setInputCode] = useState('');
   const navigate = useNavigate();
+
+  const handleProceedToCheckout = () => {
+    if (!customerUser) {
+      addToast('Login Required', 'Please log in or sign up to proceed to checkout.', 'info');
+      sessionStorage.setItem('chokku_redirect_after_login', '/checkout');
+      navigate('/login', { state: { returnUrl: '/checkout' } });
+      return;
+    }
+    navigate('/checkout');
+  };
 
   const handleCouponSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,7 +194,7 @@ export const Cart: React.FC = () => {
               </div>
 
               <Button
-                onClick={() => navigate('/checkout')}
+                onClick={handleProceedToCheckout}
                 variant="primary"
                 size="lg"
                 fullWidth

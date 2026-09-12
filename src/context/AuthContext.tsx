@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, Order } from '../types';
+import { User, Order, SavedAddress } from '../types';
 import { useToast } from './ToastContext';
 import { socket } from '../socket';
 
@@ -7,7 +7,8 @@ interface RegisterData {
   name: string;
   phone: string;
   gender: string;
-  username: string;
+  email?: string;
+  username?: string;
   password?: string;
 }
 
@@ -17,6 +18,11 @@ interface AuthContextType {
   adminUser: User | null;
   customerPoints: number;
   fetchCustomerPoints: () => Promise<number>;
+  savedAddresses: SavedAddress[];
+  isAddressesLoading: boolean;
+  fetchSavedAddresses: () => Promise<SavedAddress[]>;
+  addSavedAddress: (data: Omit<SavedAddress, 'id' | '_id' | 'isPrimary' | 'label'>) => Promise<{ success: boolean; message: string; addresses?: SavedAddress[] }>;
+  deleteSavedAddress: (addressId: string) => Promise<{ success: boolean; message: string; addresses?: SavedAddress[] }>;
   isAuthenticated: boolean;
   isAdmin: boolean;
   login: (username: string, password?: string) => Promise<boolean>;
@@ -28,6 +34,9 @@ interface AuthContextType {
   adminLogout: () => void;
   updateProfile: (updated: Partial<User>) => void;
   orders: Order[];
+  isOrdersLoading: boolean;
+  ordersError: string | null;
+  fetchMyOrders: () => Promise<void>;
   addOrder: (order: Order) => void;
   updateOrderStatus: (orderId: string, status: Order['status']) => void;
 }
@@ -74,7 +83,178 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [orders, setOrders] = useState<Order[]>([]);
+  const [isOrdersLoading, setIsOrdersLoading] = useState<boolean>(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
   const [customerPoints, setCustomerPoints] = useState<number>(0);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [isAddressesLoading, setIsAddressesLoading] = useState<boolean>(false);
+
+  // Fetch Saved Customer Addresses from MongoDB API
+  const fetchSavedAddresses = async (): Promise<SavedAddress[]> => {
+    if (!customerUser) {
+      setSavedAddresses([]);
+      return [];
+    }
+    setIsAddressesLoading(true);
+    try {
+      const token = localStorage.getItem('chokku_customer_token_v2') || '';
+      const userId = customerUser.id || (customerUser as any)._id || '';
+      const email = customerUser.email || '';
+      const phone = customerUser.phone || '';
+
+      const queryParams = new URLSearchParams();
+      if (userId) queryParams.append('customerId', userId);
+      if (email) queryParams.append('email', email);
+      if (phone) queryParams.append('phone', phone);
+
+      const res = await fetch(`${API_URL}/auth/addresses?${queryParams.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': userId,
+        },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.addresses)) {
+          setSavedAddresses(data.addresses);
+          const userKey = getCustomerOrdersKey(customerUser).replace('orders', 'addresses');
+          localStorage.setItem(userKey, JSON.stringify(data.addresses));
+          return data.addresses;
+        }
+      }
+    } catch (err) {
+      console.warn('Backend address fetch error (using local storage fallback):', err);
+      try {
+        const userKey = getCustomerOrdersKey(customerUser).replace('orders', 'addresses');
+        const saved = localStorage.getItem(userKey);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            setSavedAddresses(parsed);
+            return parsed;
+          }
+        }
+      } catch (e) {}
+    } finally {
+      setIsAddressesLoading(false);
+    }
+    return [];
+  };
+
+  // Add Saved Address (Max 3)
+  const addSavedAddress = async (
+    data: Omit<SavedAddress, 'id' | '_id' | 'isPrimary' | 'label'>
+  ): Promise<{ success: boolean; message: string; addresses?: SavedAddress[] }> => {
+    if (!customerUser) {
+      return { success: false, message: 'Please log in to save addresses.' };
+    }
+
+    try {
+      const token = localStorage.getItem('chokku_customer_token_v2') || '';
+      const userId = customerUser.id || (customerUser as any)._id || '';
+
+      const res = await fetch(`${API_URL}/auth/addresses`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': userId,
+        },
+        body: JSON.stringify({
+          customerId: userId,
+          email: customerUser.email,
+          phone: customerUser.phone,
+          ...data,
+        }),
+      });
+
+      const resData = await res.json();
+      if (res.ok && resData.success) {
+        setSavedAddresses(resData.addresses);
+        const userKey = getCustomerOrdersKey(customerUser).replace('orders', 'addresses');
+        localStorage.setItem(userKey, JSON.stringify(resData.addresses));
+        addToast('Address Saved', resData.message || 'Address saved successfully.', 'success');
+        return { success: true, message: resData.message, addresses: resData.addresses };
+      } else {
+        addToast('Cannot Save Address', resData.message || 'Failed to save address.', 'error');
+        return { success: false, message: resData.message || 'Failed to save address.' };
+      }
+    } catch (err) {
+      console.error('Error adding saved address:', err);
+      if (savedAddresses.length >= 3) {
+        const msg = 'Maximum 3 saved addresses limit reached. Please delete an address before adding a new one.';
+        addToast('Address Limit Reached', msg, 'error');
+        return { success: false, message: msg };
+      }
+      const isFirst = savedAddresses.length === 0;
+      const newAddr: SavedAddress = {
+        id: `addr-${Date.now()}`,
+        isPrimary: isFirst,
+        label: isFirst ? 'Address 1' : `Address ${savedAddresses.length + 1}`,
+        fullName: data.fullName,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        pincode: data.pincode,
+      };
+      const updated = [...savedAddresses, newAddr];
+      setSavedAddresses(updated);
+      const userKey = getCustomerOrdersKey(customerUser).replace('orders', 'addresses');
+      localStorage.setItem(userKey, JSON.stringify(updated));
+      addToast('Address Saved', 'Address saved locally.', 'success');
+      return { success: true, message: 'Address saved locally.', addresses: updated };
+    }
+  };
+
+  // Delete Saved Address
+  const deleteSavedAddress = async (
+    addressId: string
+  ): Promise<{ success: boolean; message: string; addresses?: SavedAddress[] }> => {
+    if (!customerUser) {
+      return { success: false, message: 'Please log in to manage addresses.' };
+    }
+
+    try {
+      const token = localStorage.getItem('chokku_customer_token_v2') || '';
+      const userId = customerUser.id || (customerUser as any)._id || '';
+
+      const res = await fetch(`${API_URL}/auth/addresses/${addressId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': userId,
+        },
+      });
+
+      const resData = await res.json();
+      if (res.ok && resData.success) {
+        setSavedAddresses(resData.addresses);
+        const userKey = getCustomerOrdersKey(customerUser).replace('orders', 'addresses');
+        localStorage.setItem(userKey, JSON.stringify(resData.addresses));
+        addToast('Address Deleted', resData.message || 'Saved address deleted.', 'info');
+        return { success: true, message: resData.message, addresses: resData.addresses };
+      } else {
+        addToast('Delete Failed', resData.message || 'Failed to delete address.', 'error');
+        return { success: false, message: resData.message || 'Failed to delete address.' };
+      }
+    } catch (err) {
+      console.error('Error deleting saved address:', err);
+      const filtered = savedAddresses.filter((a) => a.id !== addressId && a._id !== addressId);
+      const updated = filtered.map((addr, idx) => ({
+        ...addr,
+        isPrimary: idx === 0,
+        label: `Address ${idx + 1}`,
+      }));
+      setSavedAddresses(updated);
+      const userKey = getCustomerOrdersKey(customerUser).replace('orders', 'addresses');
+      localStorage.setItem(userKey, JSON.stringify(updated));
+      addToast('Address Deleted', 'Address deleted.', 'info');
+      return { success: true, message: 'Address deleted.', addresses: updated };
+    }
+  };
 
   // Fetch Total Customer Points from Backend API
   const fetchCustomerPoints = async (): Promise<number> => {
@@ -106,39 +286,148 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return 0;
   };
 
-  // Sync customer points automatically whenever customerUser logs in or changes
+  // Sync customer points and saved addresses automatically whenever customerUser logs in or changes
   useEffect(() => {
     if (customerUser) {
       fetchCustomerPoints();
+      fetchSavedAddresses();
     } else {
       setCustomerPoints(0);
+      setSavedAddresses([]);
     }
   }, [customerUser]);
 
-  // Clean legacy shared storage keys once
-  useEffect(() => {
-    try {
-      localStorage.removeItem('chokku_orders_v1');
-      localStorage.removeItem('chokku_user_v1');
-      localStorage.removeItem('chokku_token');
-    } catch (e) {
-      console.error('Failed clearing legacy storage keys', e);
-    }
-  }, []);
-
-  // Sync Orders for Current Logged-In Customer
-  useEffect(() => {
+  // Fetch Orders for Current Logged-In Customer from MongoDB API
+  const fetchMyOrders = async () => {
     if (!customerUser) {
       setOrders([]);
+      setIsOrdersLoading(false);
       return;
     }
+
+    setIsOrdersLoading(true);
+    setOrdersError(null);
+
+    // 1. Initial load from localStorage for fast load
     try {
       const userKey = getCustomerOrdersKey(customerUser);
       const saved = localStorage.getItem(userKey);
-      setOrders(saved ? JSON.parse(saved) : []);
-    } catch {
-      setOrders([]);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) setOrders(parsed);
+      }
+    } catch (err) {
+      console.warn('LocalStorage orders parse error:', err);
     }
+
+    // 2. Fetch fresh orders from backend MongoDB
+    try {
+      const token = localStorage.getItem('chokku_customer_token_v2') || '';
+      const userId = customerUser.id || (customerUser as any)._id || '';
+      const email = customerUser.email || '';
+      const phone = customerUser.phone || '';
+      const username = customerUser.username || '';
+
+      const queryParams = new URLSearchParams();
+      if (email) queryParams.append('email', email);
+      if (phone) queryParams.append('phone', phone);
+      if (userId) queryParams.append('userId', userId);
+      if (username) queryParams.append('username', username);
+
+      const res = await fetch(`${API_URL}/orders/my-orders?${queryParams.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': userId,
+        },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.orders)) {
+          const formatted: Order[] = data.orders.map((o: any) => ({
+            id: o.orderCustomId || o._id,
+            _id: o._id,
+            date: o.createdAt ? o.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+            createdAt: o.createdAt,
+            customerInfo: o.customerInfo,
+            items: (o.items || []).map((it: any) => {
+              const itemTitle = it.title || it.product?.name || 'Product';
+              const itemImage = it.image || it.product?.image || '/placeholder.png';
+              const itemPrice = typeof it.price === 'number' ? it.price : (it.product?.price || 0);
+
+              return {
+                ...it,
+                product: {
+                  id: it.id || it.product?.id || `prod-${Math.random()}`,
+                  name: itemTitle,
+                  image: itemImage,
+                  price: itemPrice,
+                  originalPrice: it.originalPrice || itemPrice,
+                  weight: it.weight || '',
+                  category: it.category || '',
+                  slug: '',
+                  categoryName: '',
+                  discountPercent: 0,
+                  rating: 5,
+                  reviewCount: 0,
+                  galleryImages: [],
+                  description: '',
+                  stock: 10,
+                  specifications: {},
+                },
+                quantity: it.quantity || 1,
+                title: itemTitle,
+                image: itemImage,
+                price: itemPrice,
+              };
+            }),
+            subtotal: o.subtotal || o.totalAmount,
+            discount: o.discount || 0,
+            deliveryFee: o.deliveryFee || 0,
+            totalAmount: o.totalAmount,
+            status: o.status || 'Processing',
+            paymentStatus: o.paymentStatus || 'paid',
+            shippingAddress: o.shippingAddress || {
+              fullName: customerUser.name || 'Customer',
+              email: customerUser.email || '',
+              phone: customerUser.phone || '',
+              address: '',
+              city: '',
+              state: '',
+              pincode: '',
+            },
+            paymentMethod: o.paymentMethod || 'Razorpay Online (TEST)',
+            paymentMethodDetails: o.paymentMethodDetails,
+            paymentDate: o.paymentDate,
+            paymentTime: o.paymentTime,
+            razorpayOrderId: o.razorpayOrderId,
+            razorpayPaymentId: o.razorpayPaymentId,
+            razorpaySignature: o.razorpaySignature,
+            estimatedDelivery: o.estimatedDelivery || new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          }));
+
+          setOrders(formatted);
+          const userKey = getCustomerOrdersKey(customerUser);
+          localStorage.setItem(userKey, JSON.stringify(formatted));
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setOrdersError(errData.message || 'Failed to retrieve orders from server.');
+      }
+    } catch (err: any) {
+      console.warn('Backend order fetch error (offline fallback mode):', err);
+      // If we already loaded orders from local storage, don't show error screen
+      if (orders.length === 0) {
+        setOrdersError('Unable to connect to orders server. Please check your connection.');
+      }
+    } finally {
+      setIsOrdersLoading(false);
+    }
+  };
+
+  // Sync Orders for Current Logged-In Customer from MongoDB API and LocalStorage
+  useEffect(() => {
+    fetchMyOrders();
   }, [customerUser]);
 
   // Persist Customer User
@@ -262,7 +551,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: 'u-' + Date.now(),
           name: username,
           username: username,
-          email: username.includes('@') ? username : `${username}@chokku.store`,
+          email: username.includes('@') ? username : '',
           phone: '+91 9876543210',
           gender: 'Male',
           role: 'customer',
@@ -361,8 +650,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         saveCustomerToStorage({
           id: resData.user.id || 'u-' + Date.now(),
           name: resData.user.name || data.name,
-          username: resData.user.username || data.username,
-          email: resData.user.email || `${data.username}@chokku.store`,
+          username: resData.user.username || data.email || data.username,
+          email: resData.user.email || data.email || '',
           phone: data.phone,
           gender: data.gender,
           role: 'customer',
@@ -378,7 +667,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const newUser: User = {
         id: 'u-' + Date.now(),
         name: data.name,
-        username: data.username,
+        username: data.username || data.email || '',
+        email: data.email || '',
         gender: data.gender,
         phone: data.phone,
         role: 'customer',
@@ -386,7 +676,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCustomerUser(newUser);
       saveCustomerToStorage({
         ...newUser,
-        email: `${data.username}@chokku.store`,
+        email: data.email || '',
         date: new Date().toISOString().split('T')[0],
         status: 'Active',
       });
@@ -494,6 +784,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         adminUser,
         customerPoints,
         fetchCustomerPoints,
+        savedAddresses,
+        isAddressesLoading,
+        fetchSavedAddresses,
+        addSavedAddress,
+        deleteSavedAddress,
         isAuthenticated: Boolean(customerUser),
         isAdmin: Boolean(adminUser && adminUser.role === 'admin'),
         login,
@@ -505,6 +800,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         adminLogout,
         updateProfile,
         orders,
+        isOrdersLoading,
+        ordersError,
+        fetchMyOrders,
         addOrder,
         updateOrderStatus,
       }}
