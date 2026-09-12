@@ -77,7 +77,7 @@ export interface Order {
   discount: number;
   deliveryFee: number;
   totalAmount: number;
-  status: 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
+  status: 'Pending' | 'Processing' | 'Confirmed' | 'Shipped' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
   paymentStatus?: 'pending' | 'paid' | 'failed' | 'cod';
   shippingAddress: ShippingAddress;
   paymentMethod: string;

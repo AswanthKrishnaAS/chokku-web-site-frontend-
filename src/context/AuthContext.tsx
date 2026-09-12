@@ -76,7 +76,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const saved = localStorage.getItem(ADMIN_USER_KEY);
       if (!saved) return null;
       const parsed = JSON.parse(saved);
-      return parsed && parsed.role === 'admin' ? parsed : null;
+      const r = parsed?.role?.toLowerCase();
+      return parsed && (r === 'admin' || r === 'superadmin' || parsed.role === 'ADMIN' || parsed.role === 'SUPER_ADMIN') ? parsed : null;
     } catch {
       return null;
     }
@@ -428,6 +429,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Sync Orders for Current Logged-In Customer from MongoDB API and LocalStorage
   useEffect(() => {
     fetchMyOrders();
+
+    const handleCustomerStatusUpdate = (data: { orderId: string; status: string }) => {
+      addToast(
+        'Order Status Update 🚚',
+        `Your order #${data.orderId} status has been updated to "${data.status}".`,
+        'info'
+      );
+      fetchMyOrders();
+    };
+
+    socket.on('customer_order_status_update', handleCustomerStatusUpdate);
+    return () => {
+      socket.off('customer_order_status_update', handleCustomerStatusUpdate);
+    };
   }, [customerUser]);
 
   // Persist Customer User
@@ -790,7 +805,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addSavedAddress,
         deleteSavedAddress,
         isAuthenticated: Boolean(customerUser),
-        isAdmin: Boolean(adminUser && adminUser.role === 'admin'),
+        isAdmin: Boolean(
+          adminUser &&
+            (adminUser.role?.toLowerCase() === 'admin' ||
+              adminUser.role?.toLowerCase() === 'superadmin' ||
+              adminUser.role === 'ADMIN' ||
+              adminUser.role === 'SUPER_ADMIN')
+        ),
         login,
         adminLogin,
         register,
