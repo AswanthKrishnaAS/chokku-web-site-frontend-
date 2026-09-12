@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Search, User, ShoppingCart, ChevronDown, Menu, X, Sparkles, Bell, Percent, Gamepad2, Gift, Heart, Coins } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
@@ -20,11 +20,36 @@ export const Navbar: React.FC = () => {
   const { user, isAuthenticated, customerPoints, orders } = useAuth();
   const { navbarLogo } = useWebsiteSettings();
   const navigate = useNavigate();
+  const location = useLocation();
   const searchRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
 
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+
+  const closeAllMenus = () => {
+    setIsMobileMenuOpen(false);
+    setIsCategoryDropdownOpen(false);
+    setIsSearchOpen(false);
+    setIsNotificationOpen(false);
+  };
+
+  // Auto-close navbar & popovers on route/location change
+  useEffect(() => {
+    closeAllMenus();
+  }, [location.pathname, location.search]);
+
+  // Auto-close navbar & popovers on window scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      if (isMobileMenuOpen || isCategoryDropdownOpen || isSearchOpen || isNotificationOpen) {
+        closeAllMenus();
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isMobileMenuOpen, isCategoryDropdownOpen, isSearchOpen, isNotificationOpen]);
 
   // Smooth points update animation state
   const [isPointsAnimating, setIsPointsAnimating] = useState(false);
@@ -88,7 +113,7 @@ export const Navbar: React.FC = () => {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      setIsSearchOpen(false);
+      closeAllMenus();
       navigate(`/shop?search=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
@@ -139,9 +164,11 @@ export const Navbar: React.FC = () => {
                 aria-label="Notifications"
               >
                 <Bell className="w-5 h-5 stroke-[2]" />
-                <span className="absolute -top-0.5 -right-0.5 bg-[#488710] text-white text-[10px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-white">
-                  3
-                </span>
+                {notifications.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-[#488710] text-white text-[10px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-white">
+                    {notifications.length}
+                  </span>
+                )}
               </button>
 
               {/* Notification Popover Dropdown */}
@@ -192,9 +219,11 @@ export const Navbar: React.FC = () => {
               aria-label="Shopping Cart"
             >
               <ShoppingCart className="w-5 h-5 stroke-[2]" />
-              <span className="absolute -top-0.5 -right-0.5 bg-[#488710] text-white text-[10px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-white">
-                {totalItems > 0 ? totalItems : 2}
-              </span>
+              {totalItems > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 bg-[#488710] text-white text-[10px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-white">
+                  {totalItems}
+                </span>
+              )}
             </Link>
           </div>
         </div>
@@ -362,15 +391,14 @@ export const Navbar: React.FC = () => {
           <NavLink
             to="/play-and-win"
             className={({ isActive }) =>
-              `px-4.5 py-2.5 rounded-full transition-all duration-200 flex items-center gap-1.5 ${
+              `px-4.5 py-2.5 rounded-full transition-all duration-200 ${
                 isActive
                   ? 'bg-[#f0f9e8] text-[#488710] font-extrabold shadow-2xs border border-[#d2ea9d]/60'
-                  : 'text-emerald-700 hover:text-[#488710] hover:bg-[#f6fcf1]'
+                  : 'text-gray-700 hover:text-[#488710] hover:bg-[#f6fcf1]'
               }`
             }
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-            <span>Play &amp; Win</span>
+            Play &amp; Win
           </NavLink>
 
           <NavLink
@@ -598,12 +626,9 @@ export const Navbar: React.FC = () => {
             <Link
               to="/play-and-win"
               onClick={() => setIsMobileMenuOpen(false)}
-              className="px-4 py-2 rounded-xl hover:bg-[#f0f9e8] hover:text-[#488710] font-bold text-[#488710] flex items-center justify-between"
+              className="px-4 py-2 rounded-xl hover:bg-[#f0f9e8] hover:text-[#488710]"
             >
-              <span>Play &amp; Win Arcade</span>
-              <span className="text-[10px] bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full font-black">
-                NEW 🎮
-              </span>
+              Play &amp; Win Arcade
             </Link>
             <Link
               to="/orders"

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { ServerStatusProvider, useServerStatus } from './context/ServerStatusContext';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider } from './context/AuthContext';
 import { WishlistProvider } from './context/WishlistContext';
@@ -47,9 +48,10 @@ const ScrollToTop = () => {
 // Main App Layout with conditional Navbar and Footer rendering
 const AppLayout: React.FC = () => {
   const { pathname } = useLocation();
+  const { isServerConnected } = useServerStatus();
   
-  // Hide Navbar & Footer on Admin Login page and Admin Dashboard
-  const hideHeaderFooter = ['/admin-login', '/admin-dashboard'].includes(pathname);
+  // Hide Navbar & Footer on Admin Login page, Admin Dashboard, or when server is disconnected
+  const hideHeaderFooter = ['/admin-login', '/admin-dashboard'].includes(pathname) || !isServerConnected;
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-gray-900 font-sans antialiased pb-16 lg:pb-0">
@@ -92,26 +94,28 @@ const AppLayout: React.FC = () => {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <AuthProvider>
-        <WishlistProvider>
-          <CartProvider>
-            <WebsiteSettingsProvider>
-              <CategoryProvider>
-                <ProductProvider>
-                  <GameSettingsProvider>
-                    <Router>
-                      <ScrollToTop />
-                      <AppLayout />
-                    </Router>
-                  </GameSettingsProvider>
-                </ProductProvider>
-              </CategoryProvider>
-            </WebsiteSettingsProvider>
-          </CartProvider>
-        </WishlistProvider>
-      </AuthProvider>
-    </ToastProvider>
+    <ServerStatusProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <WishlistProvider>
+            <CartProvider>
+              <WebsiteSettingsProvider>
+                <CategoryProvider>
+                  <ProductProvider>
+                    <GameSettingsProvider>
+                      <Router>
+                        <ScrollToTop />
+                        <AppLayout />
+                      </Router>
+                    </GameSettingsProvider>
+                  </ProductProvider>
+                </CategoryProvider>
+              </WebsiteSettingsProvider>
+            </CartProvider>
+          </WishlistProvider>
+        </AuthProvider>
+      </ToastProvider>
+    </ServerStatusProvider>
   );
 }
 

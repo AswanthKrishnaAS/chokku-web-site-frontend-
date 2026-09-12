@@ -14,16 +14,20 @@ import {
   Gamepad2,
   Percent,
   LayoutGrid,
+  RefreshCw,
 } from 'lucide-react';
 import { ProductCard } from '../components/ProductCard';
 import { useWebsiteSettings } from '../context/WebsiteSettingsContext';
 import { useCategories } from '../context/CategoryContext';
 import { useProducts } from '../context/ProductContext';
+import { useServerStatus } from '../context/ServerStatusContext';
 import { TreasureCoin } from '../components/TreasureCoin';
 import heroImg from '../assets/img/img.png';
 import chokkuLogo from '../assets/img/chokku.png';
+import serverImg from '../assets/img/server.png';
 
 export const Home: React.FC = () => {
+  const { isServerConnected, isChecking, checkServerConnection } = useServerStatus();
   const { homeSliders } = useWebsiteSettings();
   const { categories: dynamicCategories } = useCategories();
   const { products: storeProducts } = useProducts();
@@ -120,6 +124,54 @@ export const Home: React.FC = () => {
       setEmail('');
     }
   };
+
+  if (!isServerConnected) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-[#f2f9ed] via-[#f7fbf4] to-[#eaf5e3] flex flex-col items-center justify-center p-4 sm:p-8">
+        <div className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.08)] border border-emerald-100/60 pt-0 px-6 sm:px-10 pb-8 sm:pb-10 flex flex-col items-center text-center mt-12 sm:mt-16">
+          
+          {/* Circular Logo Badge */}
+          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-white shadow-md border border-gray-100/80 p-3 flex items-center justify-center -mt-12 sm:-mt-14 mb-2 z-10 transition-transform hover:scale-105">
+            <img
+              src={chokkuLogo}
+              alt="Chokku Store Logo"
+              className="w-full h-full object-contain"
+            />
+          </div>
+
+          {/* Server Busy Artwork */}
+          <div className="w-full max-w-[260px] sm:max-w-[300px] my-1 flex justify-center items-center">
+            <img
+              src={serverImg}
+              alt="Your Server is Busy"
+              className="w-full h-auto object-contain max-h-[220px] sm:max-h-[260px]"
+            />
+          </div>
+
+          {/* Title & Description matching screenshot font styles */}
+          <div className="space-y-2 mt-2 mb-6">
+            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight leading-tight">
+              Your server is <span className="text-[#488710]">busy</span>
+            </h1>
+            <p className="text-xs sm:text-sm font-medium text-gray-500 max-w-xs mx-auto leading-relaxed">
+              We are currently unable to connect to the backend server. Please check back shortly or try again.
+            </p>
+          </div>
+
+          {/* Gradient Green Pill Action Button */}
+          <button
+            onClick={() => checkServerConnection()}
+            disabled={isChecking}
+            className="w-full max-w-xs inline-flex items-center justify-center gap-2.5 bg-gradient-to-r from-[#488710] to-[#36680c] hover:from-[#3d740d] hover:to-[#2e580a] text-white font-black text-xs sm:text-sm py-3.5 px-6 rounded-full shadow-[0_8px_20px_rgba(72,135,16,0.35)] transition-all duration-200 transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 cursor-pointer uppercase tracking-wider"
+          >
+            <RefreshCw className={`w-4 h-4 text-white stroke-[2.5] ${isChecking ? 'animate-spin' : ''}`} />
+            <span>{isChecking ? 'CHECKING...' : 'RETRY CONNECTION'}</span>
+          </button>
+
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 sm:space-y-12 pb-16 bg-[#fbfdf9] w-full">
