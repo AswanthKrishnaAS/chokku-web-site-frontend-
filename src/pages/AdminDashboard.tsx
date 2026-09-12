@@ -402,14 +402,35 @@ export const AdminDashboard: React.FC = () => {
       addToast('New Customer Registered!', `${newCust.name || newCust.username} joined Chokku Store`, 'info');
     };
 
+    const handleSocketStatusUpdate = (data: { orderId: string; status: string }) => {
+      setAdminOrders((prev) =>
+        prev.map((o) => (o.id === data.orderId || o._id === data.orderId ? { ...o, status: data.status } : o))
+      );
+      const newNotif: AdminNotification = {
+        id: `notif-status-${Date.now()}`,
+        type: 'order',
+        title: 'Order Status Updated',
+        message: `Order #${data.orderId} status changed to ${data.status}`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        read: false,
+        linkSection: 'orders',
+      };
+      setAdminNotifications((prev) => [newNotif, ...prev]);
+      playNotificationSound();
+    };
+
     socket.on('admin_new_order', handleSocketOrder);
     socket.on('admin_payment_update', handleSocketPaymentUpdate);
     socket.on('admin_new_customer', handleSocketCustomer);
+    socket.on('admin_order_status_update', handleSocketStatusUpdate);
+    socket.on('customer_order_status_update', handleSocketStatusUpdate);
 
     return () => {
       socket.off('admin_new_order', handleSocketOrder);
       socket.off('admin_payment_update', handleSocketPaymentUpdate);
       socket.off('admin_new_customer', handleSocketCustomer);
+      socket.off('admin_order_status_update', handleSocketStatusUpdate);
+      socket.off('customer_order_status_update', handleSocketStatusUpdate);
     };
   }, []);
 
@@ -1570,7 +1591,7 @@ export const AdminDashboard: React.FC = () => {
                         <td className="py-3.5 px-4">
                           <span
                             className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
-                              usr.role === 'admin'
+                              usr.role?.toLowerCase() === 'admin' || usr.role === 'ADMIN'
                                 ? 'bg-purple-50 text-purple-700 border-purple-200'
                                 : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             }`}
