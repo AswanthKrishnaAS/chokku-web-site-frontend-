@@ -20,3 +20,8 @@
     font-family: 'Raleway', sans-serif;
   }
 }
+
+/* Hide mobile bottom navigation bar when modal/camera is open */
+body.hide-bottom-nav .fixed.bottom-0 {
+  display: none !important;
+}

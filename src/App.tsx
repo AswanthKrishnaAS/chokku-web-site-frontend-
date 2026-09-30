@@ -32,8 +32,12 @@ import { Orders } from './pages/Orders';
 import { PlayAndWin } from './pages/PlayAndWin';
 import { CatchtheGift } from './pages/CatchtheGift';
 import { NotFound } from './pages/NotFound';
-import { AdminLogin } from './pages/AdminLogin';
-import { AdminDashboard } from './pages/AdminDashboard';
+import { AdminLogin } from './pages/admindashboard/AdminLogin';
+import { AdminDashboard } from './pages/admindashboard/AdminDashboard';
+import { ProductList } from './pages/admindashboard/product/ProductList';
+import { ProductAdd } from './pages/admindashboard/product/ProductAdd';
+import { ProductEdit } from './pages/admindashboard/product/ProductEdit';
+import { ProductView } from './pages/admindashboard/product/ProductView';
 import { AdminProtectedRoute } from './components/AdminProtectedRoute';
 
 // Scroll To Top on route transition
@@ -50,8 +54,8 @@ const AppLayout: React.FC = () => {
   const { pathname } = useLocation();
   const { isServerConnected } = useServerStatus();
   
-  // Hide Navbar & Footer on Admin Login page, Admin Dashboard, or when server is disconnected
-  const hideHeaderFooter = ['/admin-login', '/admin-dashboard'].includes(pathname) || !isServerConnected;
+  // Hide Navbar & Footer on Admin pages or when server is disconnected
+  const hideHeaderFooter = pathname.startsWith('/admin') || !isServerConnected;
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-gray-900 font-sans antialiased pb-16 lg:pb-0">
@@ -79,6 +83,38 @@ const AppLayout: React.FC = () => {
             element={
               <AdminProtectedRoute>
                 <AdminDashboard />
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin-dashboard/products"
+            element={
+              <AdminProtectedRoute>
+                <ProductList />
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin-dashboard/products/add"
+            element={
+              <AdminProtectedRoute>
+                <ProductAdd />
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin-dashboard/products/edit/:id"
+            element={
+              <AdminProtectedRoute>
+                <ProductEdit />
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin-dashboard/products/view/:id"
+            element={
+              <AdminProtectedRoute>
+                <ProductView />
               </AdminProtectedRoute>
             }
           />

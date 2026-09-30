@@ -6,6 +6,7 @@ interface ProductContextType {
   isLoading: boolean;
   addProductOrUpdate: (productData: Partial<Product>) => Promise<{ success: boolean; message: string }>;
   uploadProductImages: (files: File[]) => Promise<{ success: boolean; message: string; imageUrls?: string[] }>;
+  uploadTryOnImages: (files: File[]) => Promise<{ success: boolean; message: string; imageUrls?: string[] }>;
   deleteProduct: (productId: string) => Promise<{ success: boolean; message: string }>;
   refreshProducts: () => Promise<void>;
 }
@@ -97,6 +98,46 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  const uploadTryOnImages = async (files: File[]) => {
+    if (!files || files.length === 0) {
+      return { success: false, message: 'No Try On image files selected' };
+    }
+
+    const formData = new FormData();
+    // Allow up to 5 PNG images
+    const limitFiles = files.slice(0, 5);
+    limitFiles.forEach((file) => {
+      formData.append('tryOnImages', file);
+    });
+
+    try {
+      const res = await fetch(`${API_URL}/products/upload-tryon-images`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && Array.isArray(data.imageUrls)) {
+        return {
+          success: true,
+          message: data.message || 'Try On PNG images uploaded successfully',
+          imageUrls: data.imageUrls,
+        };
+      } else {
+        return {
+          success: false,
+          message: data.message || 'Failed to upload Try On PNG images',
+        };
+      }
+    } catch (err: any) {
+      console.error('Try On images upload error:', err);
+      return {
+        success: false,
+        message: err.message || 'Network error during Try On images upload',
+      };
+    }
+  };
+
   const addProductOrUpdate = async (productData: Partial<Product>) => {
     try {
       const res = await fetch(`${API_URL}/products`, {
@@ -146,6 +187,8 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isFeatured: productData.isFeatured || false,
         isNewArrival: productData.isNewArrival || false,
         isBestSeller: productData.isBestSeller || false,
+        tryOn: productData.tryOn || false,
+        tryOnImages: productData.tryOnImages || [],
       };
       saveProductsLocal([newProd, ...updated]);
       return {
@@ -190,6 +233,7 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isLoading,
         addProductOrUpdate,
         uploadProductImages,
+        uploadTryOnImages,
         deleteProduct,
         refreshProducts,
       }}
