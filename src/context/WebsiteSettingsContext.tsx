@@ -3,6 +3,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 export interface HomeSlideItem {
   id: string;
   image: string;
+  desktopImage?: string;
+  mobileImage?: string;
   metaTag: string;
   heading: string;
   subheading: string;

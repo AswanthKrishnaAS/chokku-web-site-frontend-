@@ -51,7 +51,7 @@ export class HandLandmarkerService {
   private isInitialized = false;
   private isLoading = false;
 
-  private constructor() {}
+  private constructor() { }
 
   public static getInstance(): HandLandmarkerService {
     if (!HandLandmarkerService.instance) {
@@ -124,7 +124,7 @@ export class HandLandmarkerService {
     if (this.handsInstance) {
       try {
         this.handsInstance.close();
-      } catch (e) {}
+      } catch (e) { }
       this.handsInstance = null;
     }
     this.isInitialized = false;
