@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import chokkuLogo from '../assets/img/chokku.png';
+import { useAuth } from '../../context/AuthContext';
+import chokkuLogo from '../../assets/img/chokku.png';
 
 export const AdminLogin: React.FC = () => {
   const [username, setUsername] = useState('');

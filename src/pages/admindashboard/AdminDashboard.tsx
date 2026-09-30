@@ -41,20 +41,20 @@ import {
   Trophy,
   MapPin
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { useWebsiteSettings, HomeSlideItem } from '../context/WebsiteSettingsContext';
-import { useCategories } from '../context/CategoryContext';
-import { useProducts } from '../context/ProductContext';
-import { useToast } from '../context/ToastContext';
-import { useGameSettings, GiftBoxRewardConfig } from '../context/GameSettingsContext';
-import { PRODUCTS } from '../data/products';
-import { CATEGORIES } from '../data/categories';
-import { Product, Order } from '../types';
-import chokkuLogo from '../assets/img/chokku.png';
-import heroImg from '../assets/img/img.png';
-import loginImg from '../assets/img/login.png';
-import notificationAudioSound from '../assets/notification.mp3';
-import { socket } from '../socket';
+import { useAuth } from '../../context/AuthContext';
+import { useWebsiteSettings, HomeSlideItem } from '../../context/WebsiteSettingsContext';
+import { useCategories } from '../../context/CategoryContext';
+import { useProducts } from '../../context/ProductContext';
+import { useToast } from '../../context/ToastContext';
+import { useGameSettings, GiftBoxRewardConfig } from '../../context/GameSettingsContext';
+import { PRODUCTS } from '../../data/products';
+import { CATEGORIES } from '../../data/categories';
+import { Product, Order } from '../../types';
+import chokkuLogo from '../../assets/img/chokku.png';
+import heroImg from '../../assets/img/img.png';
+import loginImg from '../../assets/img/login.png';
+import notificationAudioSound from '../../assets/notification.mp3';
+import { socket } from '../../socket';
 
 interface AdminNotification {
   id: string;
@@ -931,47 +931,11 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleOpenAddProd = () => {
-    setProdEditId(null);
-    setProdName('');
-    setProdCategory(storeCategories[0]?.slug || 'electronics');
-    setProdStock(10);
-    setProdOriginalPrice('99.99');
-    setProdSellingPrice('79.99');
-    setProdDiscountTag('SAVE 20%');
-    setProdDescription('');
-    setProdIsFeatured(true);
-    setProdIsNewArrival(true);
-    setProdIsBestSeller(false);
-    setProdFiles([]);
-    setProdPreviews([]);
-    setProdSpecs([{ key: 'Brand', value: '' }, { key: 'Warranty', value: '1 Year' }]);
-    setShowAddProductModal(true);
+    navigate('/admin-dashboard/products/add');
   };
 
   const handleEditProduct = (product: Product) => {
-    setProdEditId(product.id);
-    setProdName(product.name || '');
-    setProdCategory(product.category || storeCategories[0]?.slug || 'electronics');
-    setProdStock(product.stock !== undefined ? product.stock : 10);
-    setProdOriginalPrice(product.originalPrice ? product.originalPrice.toString() : product.price.toString());
-    setProdSellingPrice(product.price ? product.price.toString() : '0');
-    setProdDiscountTag(product.discountTag || '');
-    setProdDescription(product.description || '');
-    setProdIsFeatured(Boolean(product.isFeatured));
-    setProdIsNewArrival(Boolean(product.isNewArrival));
-    setProdIsBestSeller(Boolean(product.isBestSeller));
-    setProdFiles([]);
-    setProdPreviews(product.galleryImages && product.galleryImages.length > 0 ? product.galleryImages : product.image ? [product.image] : []);
-
-    // Parse specs
-    if (product.specifications && typeof product.specifications === 'object') {
-      const specList = Object.entries(product.specifications).map(([key, value]) => ({ key, value }));
-      setProdSpecs(specList.length > 0 ? specList : [{ key: 'Brand', value: '' }]);
-    } else {
-      setProdSpecs([{ key: 'Brand', value: '' }]);
-    }
-
-    setShowAddProductModal(true);
+    navigate(`/admin-dashboard/products/edit/${product.id}`);
   };
 
   const handleSaveProductSubmit = async (e: React.FormEvent) => {
@@ -1055,10 +1019,10 @@ export const AdminDashboard: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-900">
+    <div className="h-screen w-screen max-w-full overflow-hidden bg-gray-50 flex flex-col font-sans text-gray-900">
       
       {/* TOP HEADER BAR */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-2xs">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-2xs shrink-0">
         <div className="px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
           
           {/* Left: Mobile Drawer Button & Branding */}
@@ -1200,11 +1164,11 @@ export const AdminDashboard: React.FC = () => {
       </header>
 
       {/* BODY CONTENT WITH LEFT SIDEBAR */}
-      <div className="flex-1 flex max-w-full">
+      <div className="flex-1 flex overflow-hidden w-full h-full">
         
         {/* ================= DESKTOP & MOBILE LEFT SIDEBAR ================= */}
         <aside
-          className={`fixed lg:static inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 flex flex-col justify-between transition-transform duration-300 transform ${
+          className={`fixed lg:static inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 flex flex-col justify-between shrink-0 h-full overflow-hidden transition-transform duration-300 transform ${
             isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
           }`}
         >
@@ -1337,7 +1301,7 @@ export const AdminDashboard: React.FC = () => {
         )}
 
         {/* ================= MAIN DASHBOARD CONTENT AREA ================= */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto">
+        <main className="flex-1 min-w-0 h-full p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto">
           
           {/* ================= SUMMARY STATISTIC CARDS (4 METRICS) ================= */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -1728,6 +1692,13 @@ export const AdminDashboard: React.FC = () => {
                             </td>
                             <td className="py-3.5 px-4 text-right">
                               <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/admin-dashboard/products/view/${product.id}`)}
+                                  className="px-2.5 py-1 bg-[#609f00]/10 hover:bg-[#609f00]/20 text-[#609f00] border border-[#609f00]/20 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                >
+                                  View
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => handleEditProduct(product)}

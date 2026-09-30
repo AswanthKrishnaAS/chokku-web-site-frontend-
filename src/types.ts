@@ -7,6 +7,13 @@ export interface Category {
   itemCount: number;
 }
 
+export interface TryOnConfig {
+  offsetX: number;
+  offsetY: number;
+  scale: number;
+  rotationOffset: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -28,6 +35,15 @@ export interface Product {
   isBestSeller?: boolean;
   discountTag?: string;
   tags?: string[];
+  tryOn?: boolean;
+  tryOnEnabled?: boolean;
+  tryOnImages?: string[];
+  tryOnImage?: string | null;
+  tryOnType?: string;
+  tryOnCategory?: string | null;
+  tryOnSize?: 'Small' | 'Medium' | 'Large';
+  tryOnScale?: number;
+  tryOnConfig?: TryOnConfig;
 }
 
 export interface CartItem {

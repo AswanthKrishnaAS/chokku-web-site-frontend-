@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Star, Heart, ShoppingBag, Truck, ShieldCheck, ArrowLeft, CheckCircle2, ChevronRight, Share2 } from 'lucide-react';
+import { Star, Heart, ShoppingBag, Truck, ShieldCheck, ArrowLeft, CheckCircle2, ChevronRight, Share2, Sparkles, Camera } from 'lucide-react';
 import { PRODUCTS } from '../data/products';
 import { useProducts } from '../context/ProductContext';
 import { useCart } from '../context/CartContext';
@@ -9,6 +9,7 @@ import { ProductCard } from '../components/ProductCard';
 import { Button } from '../components/Button';
 import { useToast } from '../context/ToastContext';
 import { TreasureCoin } from '../components/TreasureCoin';
+import { TryOnModal } from '../components/TryOnModal';
 
 import { useAuth } from '../context/AuthContext';
 
@@ -27,6 +28,7 @@ export const ProductDetails: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(1);
   const [activeTab, setActiveTab] = useState<'specs' | 'description'>('specs');
+  const [isTryOnOpen, setIsTryOnOpen] = useState<boolean>(false);
 
   // Sync main image when product changes
   React.useEffect(() => {
@@ -144,6 +146,19 @@ export const ProductDetails: React.FC = () => {
               >
                 <Share2 className="w-4 h-4" />
               </button>
+
+              {/* Floating Try On Button on Right Side of Product Image */}
+              {Boolean(product.tryOn && Array.isArray(product.tryOnImages) && product.tryOnImages.length > 0) && (
+                <button
+                  onClick={() => setIsTryOnOpen(true)}
+                  className="absolute bottom-4 right-4 bg-gradient-to-r from-brand-green via-teal-600 to-brand-blue hover:from-brand-green-hover hover:to-brand-blue-hover text-white text-xs sm:text-sm font-extrabold px-4 py-2.5 rounded-full shadow-lg shadow-brand-green/20 backdrop-blur-md flex items-center gap-2 border border-white/30 transition-all hover:scale-105 cursor-pointer z-10"
+                  title="Virtual Try On"
+                >
+                  <Sparkles className="w-4 h-4 animate-pulse text-amber-200" />
+                  <Camera className="w-4 h-4 text-white" />
+                  <span>Try On</span>
+                </button>
+              )}
             </div>
 
             {/* Thumbnail Carousel / List */}
@@ -321,6 +336,18 @@ export const ProductDetails: React.FC = () => {
                   Buy Now (₹{(product.price * quantity).toFixed(2)})
                 </Button>
 
+                {(product.tryOnEnabled || product.tryOn) && (
+                  <Button
+                    onClick={() => setIsTryOnOpen(true)}
+                    variant="secondary"
+                    size="lg"
+                    className="flex-1 cursor-pointer bg-amber-500 hover:bg-amber-600 text-slate-950 font-black border-amber-400 shadow-md"
+                    icon={<Sparkles className="w-5 h-5 text-slate-950 fill-slate-950" />}
+                  >
+                    Try On
+                  </Button>
+                )}
+
                 <button
                   onClick={() => toggleWishlist(product.id)}
                   className={`p-3.5 rounded-xl border transition-colors flex items-center justify-center shrink-0 ${
@@ -421,6 +448,14 @@ export const ProductDetails: React.FC = () => {
 
       {/* Golden Treasure Coin for Product Details Page */}
       <TreasureCoin pageId="product" />
+
+      {/* Virtual Try-On Modal */}
+      <TryOnModal
+        isOpen={isTryOnOpen}
+        onClose={() => setIsTryOnOpen(false)}
+        product={product}
+        selectedProductImage={selectedImage || product.image}
+      />
     </div>
   );
 };
