@@ -39,7 +39,9 @@ import {
   ChevronDown,
   Zap,
   Trophy,
-  MapPin
+  MapPin,
+  FolderTree,
+  Link as LinkIcon
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useWebsiteSettings, HomeSlideItem } from '../../context/WebsiteSettingsContext';
@@ -614,9 +616,17 @@ export const AdminDashboard: React.FC = () => {
   const [slideButtonText, setSlideButtonText] = useState('Shop Now');
   const [slideButtonLink, setSlideButtonLink] = useState('/shop');
   const [slideStatus, setSlideStatus] = useState<'Active' | 'Inactive'>('Active');
-  const [slideFile, setSlideFile] = useState<File | null>(null);
-  const [slidePreview, setSlidePreview] = useState<string | null>(null);
+  const [desktopSlideFile, setDesktopSlideFile] = useState<File | null>(null);
+  const [desktopSlidePreview, setDesktopSlidePreview] = useState<string | null>(null);
+  const [mobileSlideFile, setMobileSlideFile] = useState<File | null>(null);
+  const [mobileSlidePreview, setMobileSlidePreview] = useState<string | null>(null);
   const [isSavingSlider, setIsSavingSlider] = useState(false);
+
+  // Navigation Target Selector State
+  const [targetType, setTargetType] = useState<'category' | 'product' | 'game' | 'custom'>('custom');
+  const [selectedCategoryRoute, setSelectedCategoryRoute] = useState('');
+  const [selectedProductRoute, setSelectedProductRoute] = useState('');
+  const [selectedGameRoute, setSelectedGameRoute] = useState('/catch-the-gift');
 
   // Default fallback slides if database is empty
   const activeSlides: HomeSlideItem[] = homeSliders.length > 0 ? homeSliders : [
@@ -642,41 +652,75 @@ export const AdminDashboard: React.FC = () => {
     },
   ];
 
-  const handleSlideFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDesktopSlideFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       if (!file.type.startsWith('image/')) {
-        addToast('Invalid File', 'Please select an image file for the banner slide', 'error');
+        addToast('Invalid File', 'Please select an image file for desktop banner', 'error');
         return;
       }
-      setSlideFile(file);
-      setSlidePreview(URL.createObjectURL(file));
+      setDesktopSlideFile(file);
+      setDesktopSlidePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleMobileSlideFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (!file.type.startsWith('image/')) {
+        addToast('Invalid File', 'Please select an image file for mobile banner', 'error');
+        return;
+      }
+      setMobileSlideFile(file);
+      setMobileSlidePreview(URL.createObjectURL(file));
     }
   };
 
   const handleOpenAddBanner = () => {
     setSlideEditId(null);
     setSlideMetaTag('SPECIAL OFFER');
-    setSlideHeading('');
-    setSlideSubheading('');
-    setSlideButtonText('Shop Now');
+    setSlideHeading('Homepage Banner');
+    setSlideSubheading('Homepage Hero Banner');
+    setSlideButtonText('Explore');
     setSlideButtonLink('/shop');
     setSlideStatus('Active');
-    setSlideFile(null);
-    setSlidePreview(null);
+    setTargetType('custom');
+    setSelectedCategoryRoute('');
+    setSelectedProductRoute('');
+    setSelectedGameRoute('/catch-the-gift');
+    setDesktopSlideFile(null);
+    setDesktopSlidePreview(null);
+    setMobileSlideFile(null);
+    setMobileSlidePreview(null);
     setSliderViewMode('form');
   };
 
   const handleEditSlide = (slide: HomeSlideItem) => {
     setSlideEditId(slide.id);
     setSlideMetaTag(slide.metaTag || 'SPECIAL OFFER');
-    setSlideHeading(slide.heading || '');
-    setSlideSubheading(slide.subheading || '');
-    setSlideButtonText(slide.buttonText || 'Shop Now');
-    setSlideButtonLink(slide.buttonLink || '/shop');
+    setSlideHeading(slide.heading || 'Homepage Banner');
+    setSlideSubheading(slide.subheading || 'Homepage Hero Banner');
+    setSlideButtonText(slide.buttonText || 'Explore');
+    const link = slide.buttonLink || '/shop';
+    setSlideButtonLink(link);
     setSlideStatus(slide.status || 'Active');
-    setSlidePreview(slide.image || heroImg);
-    setSlideFile(null);
+    setDesktopSlidePreview(slide.desktopImage || slide.image || heroImg);
+    setMobileSlidePreview(slide.mobileImage || null);
+    setDesktopSlideFile(null);
+    setMobileSlideFile(null);
+
+    if (link.startsWith('/category/')) {
+      setTargetType('category');
+      setSelectedCategoryRoute(decodeURIComponent(link.replace('/category/', '')));
+    } else if (link.startsWith('/product/')) {
+      setTargetType('product');
+      setSelectedProductRoute(link.replace('/product/', ''));
+    } else if (['/catch-the-gift', '/play-and-win', '/points'].includes(link)) {
+      setTargetType('game');
+      setSelectedGameRoute(link);
+    } else {
+      setTargetType('custom');
+    }
     setSliderViewMode('form');
   };
 
@@ -694,23 +738,42 @@ export const AdminDashboard: React.FC = () => {
 
   const handleSaveSlideSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!slideHeading.trim() || !slideSubheading.trim()) {
-      addToast('Missing Required Fields', 'Please fill in both Heading and Sub-Heading', 'error');
-      return;
-    }
 
     setIsSavingSlider(true);
-    let finalImageUrl = slidePreview || heroImg;
+    let finalDesktopUrl = desktopSlidePreview || '';
+    let finalMobileUrl = mobileSlidePreview || '';
 
-    if (slideFile) {
-      const uploadRes = await uploadSliderImage(slideFile);
+    if (desktopSlideFile) {
+      const uploadRes = await uploadSliderImage(desktopSlideFile);
       if (uploadRes.success && uploadRes.imageUrl) {
-        finalImageUrl = uploadRes.imageUrl;
+        finalDesktopUrl = uploadRes.imageUrl;
       } else {
-        addToast('Upload Failed', uploadRes.message || 'Error uploading banner image file', 'error');
+        addToast('Upload Failed', uploadRes.message || 'Error uploading desktop banner image file', 'error');
         setIsSavingSlider(false);
         return;
       }
+    }
+
+    if (mobileSlideFile) {
+      const uploadRes = await uploadSliderImage(mobileSlideFile);
+      if (uploadRes.success && uploadRes.imageUrl) {
+        finalMobileUrl = uploadRes.imageUrl;
+      } else {
+        addToast('Upload Failed', uploadRes.message || 'Error uploading mobile banner image file', 'error');
+        setIsSavingSlider(false);
+        return;
+      }
+    }
+
+    const mainImageUrl = finalDesktopUrl || finalMobileUrl || heroImg;
+
+    let finalButtonLink = slideButtonLink.trim() || '/shop';
+    if (targetType === 'category') {
+      finalButtonLink = selectedCategoryRoute ? `/category/${encodeURIComponent(selectedCategoryRoute)}` : '/shop';
+    } else if (targetType === 'product') {
+      finalButtonLink = selectedProductRoute ? `/product/${selectedProductRoute}` : '/shop';
+    } else if (targetType === 'game') {
+      finalButtonLink = selectedGameRoute || '/catch-the-gift';
     }
 
     let updatedSlides: HomeSlideItem[] = [];
@@ -720,12 +783,14 @@ export const AdminDashboard: React.FC = () => {
         s.id === slideEditId
           ? {
               ...s,
-              image: finalImageUrl,
-              metaTag: slideMetaTag.trim(),
-              heading: slideHeading.trim(),
-              subheading: slideSubheading.trim(),
-              buttonText: slideButtonText.trim(),
-              buttonLink: slideButtonLink.trim(),
+              image: mainImageUrl,
+              desktopImage: finalDesktopUrl,
+              mobileImage: finalMobileUrl,
+              metaTag: slideMetaTag.trim() || 'SPECIAL OFFER',
+              heading: slideHeading.trim() || 'Homepage Banner',
+              subheading: slideSubheading.trim() || 'Homepage Hero Banner',
+              buttonText: slideButtonText.trim() || 'Explore',
+              buttonLink: finalButtonLink,
               status: slideStatus,
             }
           : s
@@ -734,12 +799,14 @@ export const AdminDashboard: React.FC = () => {
       // Create new slide
       const newSlide: HomeSlideItem = {
         id: 'slide-' + Date.now(),
-        image: finalImageUrl,
-        metaTag: slideMetaTag.trim(),
-        heading: slideHeading.trim(),
-        subheading: slideSubheading.trim(),
-        buttonText: slideButtonText.trim(),
-        buttonLink: slideButtonLink.trim(),
+        image: mainImageUrl,
+        desktopImage: finalDesktopUrl,
+        mobileImage: finalMobileUrl,
+        metaTag: slideMetaTag.trim() || 'SPECIAL OFFER',
+        heading: slideHeading.trim() || 'Homepage Banner',
+        subheading: slideSubheading.trim() || 'Homepage Hero Banner',
+        buttonText: slideButtonText.trim() || 'Explore',
+        buttonLink: finalButtonLink,
         status: slideStatus,
       };
       updatedSlides = [newSlide, ...activeSlides];
@@ -2348,17 +2415,37 @@ export const AdminDashboard: React.FC = () => {
                           const isInactive = slide.status === 'Inactive';
                           return (
                             <tr key={slide.id} className="hover:bg-gray-50/80 transition-colors">
-                              {/* Asset Image Thumbnail */}
+                              {/* Asset Image Thumbnails (Desktop & Mobile) */}
                               <td className="py-3.5 px-4 shrink-0">
-                                <div className="w-28 h-16 rounded-xl overflow-hidden border border-gray-200 shadow-2xs relative bg-gray-100">
-                                  <img
-                                    src={slide.image || heroImg}
-                                    alt={slide.heading}
-                                    className={`w-full h-full object-cover ${isInactive ? 'grayscale opacity-60' : ''}`}
-                                    onError={(e) => {
-                                      (e.currentTarget as HTMLImageElement).src = heroImg;
-                                    }}
-                                  />
+                                <div className="flex items-center gap-2">
+                                  {/* Desktop Thumbnail */}
+                                  <div className="space-y-1">
+                                    <div className="w-24 h-14 rounded-xl overflow-hidden border border-gray-200 shadow-2xs relative bg-gray-100">
+                                      <img
+                                        src={slide.desktopImage || slide.image || heroImg}
+                                        alt={slide.heading}
+                                        className={`w-full h-full object-cover ${isInactive ? 'grayscale opacity-60' : ''}`}
+                                        onError={(e) => {
+                                          (e.currentTarget as HTMLImageElement).src = heroImg;
+                                        }}
+                                      />
+                                    </div>
+                                    <span className="inline-block text-[9px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">🖥️ Desktop</span>
+                                  </div>
+
+                                  {/* Mobile Thumbnail */}
+                                  {slide.mobileImage && (
+                                    <div className="space-y-1">
+                                      <div className="w-10 h-14 rounded-xl overflow-hidden border border-gray-200 shadow-2xs relative bg-gray-100">
+                                        <img
+                                          src={slide.mobileImage}
+                                          alt={slide.heading}
+                                          className={`w-full h-full object-cover ${isInactive ? 'grayscale opacity-60' : ''}`}
+                                        />
+                                      </div>
+                                      <span className="inline-block text-[9px] font-extrabold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded">📱 Mobile</span>
+                                    </div>
+                                  )}
                                 </div>
                               </td>
 
@@ -2423,7 +2510,7 @@ export const AdminDashboard: React.FC = () => {
 
               {/* ================= 9B: BANNER CREATION & EDIT FORM VIEW ================= */}
               {sliderViewMode === 'form' && (
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-2xs space-y-6 max-w-4xl">
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-2xs space-y-6 w-full">
                   {/* Top Bar with Back Button */}
                   <div className="flex items-center justify-between border-b border-gray-100 pb-4">
                     <div>
@@ -2446,136 +2533,373 @@ export const AdminDashboard: React.FC = () => {
                   {/* FORM */}
                   <form onSubmit={handleSaveSlideSubmit} className="space-y-6">
                     
-                    {/* 1. IMAGE FILE UPLOAD INPUT */}
-                    <div className="space-y-3 bg-gray-50/80 p-5 rounded-2xl border border-gray-200">
-                      <label className="block text-xs font-extrabold text-gray-900 uppercase tracking-wider">
-                        1. Upload Banner Image File
-                      </label>
-                      <p className="text-xs text-gray-500">Select an image file from your device to upload as the hero banner.</p>
+                    {/* 1. DESKTOP & MOBILE BANNER IMAGES */}
+                    <div className="space-y-4 bg-gray-50/80 p-5 rounded-2xl border border-gray-200">
+                      <div>
+                        <label className="block text-xs font-extrabold text-gray-900 uppercase tracking-wider">
+                          1. Upload Banner Images (Desktop & Mobile Views)
+                        </label>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Provide separate image files for Desktop View and Mobile View for responsive presentation.
+                        </p>
+                      </div>
 
-                      {/* Dropzone Box */}
-                      <div className="relative border-2 border-dashed border-gray-300 hover:border-[#609f00] rounded-2xl p-6 text-center transition-colors bg-white group cursor-pointer">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleSlideFileSelect}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        />
-                        <div className="flex flex-col items-center justify-center space-y-2">
-                          <div className="w-12 h-12 rounded-full bg-[#f0f9e8] text-[#488710] flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <Upload className="w-6 h-6" />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* DESKTOP IMAGE INPUT */}
+                        <div className="space-y-2.5 bg-white p-4 rounded-xl border border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-extrabold text-blue-900 flex items-center gap-1.5 uppercase tracking-wider">
+                              <span>🖥️ Desktop Image</span>
+                              <span className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded font-bold">Desktop View</span>
+                            </label>
                           </div>
-                          <div className="text-xs">
-                            <span className="font-extrabold text-[#488710]">Click to choose image file</span>
-                            <span className="text-gray-500"> or drag & drop</span>
+                          <p className="text-[11px] text-gray-500">Displayed on desktop screens (1920 x 800 recommended)</p>
+
+                          {/* Dropzone */}
+                          <div className="relative border-2 border-dashed border-gray-300 hover:border-blue-500 rounded-xl p-5 text-center transition-colors bg-gray-50/50 group cursor-pointer">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleDesktopSlideFileSelect}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            />
+                            <div className="flex flex-col items-center justify-center space-y-1.5">
+                              <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <Upload className="w-5 h-5" />
+                              </div>
+                              <div className="text-xs">
+                                <span className="font-extrabold text-blue-600">Choose Desktop Image</span>
+                              </div>
+                              <p className="text-[10px] text-gray-400">PNG, JPG, WebP</p>
+                            </div>
                           </div>
-                          <p className="text-[10px] text-gray-400">PNG, JPG, WebP (1920 x 800 recommended)</p>
+
+                          {/* Preview / File selection */}
+                          {desktopSlidePreview && (
+                            <div className="space-y-2 pt-2">
+                              <div className="relative h-24 rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
+                                <img src={desktopSlidePreview} alt="Desktop Preview" className="w-full h-full object-cover" />
+                              </div>
+                              {desktopSlideFile && (
+                                <div className="p-2 bg-blue-50 text-blue-800 rounded-lg text-[11px] font-bold flex items-center justify-between">
+                                  <span className="truncate">{desktopSlideFile.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDesktopSlideFile(null);
+                                      setDesktopSlidePreview(null);
+                                    }}
+                                    className="text-rose-600 hover:underline font-extrabold ml-2 shrink-0"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* MOBILE IMAGE INPUT */}
+                        <div className="space-y-2.5 bg-white p-4 rounded-xl border border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-extrabold text-purple-900 flex items-center gap-1.5 uppercase tracking-wider">
+                              <span>📱 Mobile Image</span>
+                              <span className="text-[10px] text-purple-600 bg-purple-50 px-2 py-0.5 rounded font-bold">Mobile View</span>
+                            </label>
+                          </div>
+                          <p className="text-[11px] text-gray-500">Displayed on mobile screens (800 x 1000 recommended)</p>
+
+                          {/* Dropzone */}
+                          <div className="relative border-2 border-dashed border-gray-300 hover:border-purple-500 rounded-xl p-5 text-center transition-colors bg-gray-50/50 group cursor-pointer">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleMobileSlideFileSelect}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            />
+                            <div className="flex flex-col items-center justify-center space-y-1.5">
+                              <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <Upload className="w-5 h-5" />
+                              </div>
+                              <div className="text-xs">
+                                <span className="font-extrabold text-purple-600">Choose Mobile Image</span>
+                              </div>
+                              <p className="text-[10px] text-gray-400">PNG, JPG, WebP</p>
+                            </div>
+                          </div>
+
+                          {/* Preview / File selection */}
+                          {mobileSlidePreview && (
+                            <div className="space-y-2 pt-2">
+                              <div className="relative h-24 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 flex justify-center">
+                                <img src={mobileSlidePreview} alt="Mobile Preview" className="h-full object-contain" />
+                              </div>
+                              {mobileSlideFile && (
+                                <div className="p-2 bg-purple-50 text-purple-800 rounded-lg text-[11px] font-bold flex items-center justify-between">
+                                  <span className="truncate">{mobileSlideFile.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setMobileSlideFile(null);
+                                      setMobileSlidePreview(null);
+                                    }}
+                                    className="text-rose-600 hover:underline font-extrabold ml-2 shrink-0"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
-                      {slideFile && (
-                        <div className="p-2.5 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200 text-xs font-extrabold flex items-center justify-between">
-                          <span>Selected File: {slideFile.name} ({(slideFile.size / 1024).toFixed(1)} KB)</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSlideFile(null);
-                              setSlidePreview(null);
-                            }}
-                            className="text-emerald-700 hover:text-rose-600 font-extrabold px-2 py-0.5"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      )}
                     </div>
 
-                    {/* 2. META TAG & HEADINGS */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    {/* 2. BANNER CLICK DESTINATION / NAVIGATION ROUTE */}
+                    <div className="space-y-4 bg-gray-50/80 p-5 rounded-2xl border border-gray-200">
                       <div>
-                        <label className="block font-bold text-gray-700 mb-1.5 uppercase tracking-wider">
-                          2. Meta Tag / Tagline Heading
+                        <label className="block text-xs font-extrabold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                          <LinkIcon className="w-4 h-4 text-[#609f00]" />
+                          <span>2. Banner Click Destination (Where banner navigates on click)</span>
                         </label>
-                        <input
-                          type="text"
-                          required
-                          value={slideMetaTag}
-                          onChange={(e) => setSlideMetaTag(e.target.value)}
-                          placeholder="e.g. SPECIAL SUMMER OFFER, 100% ORGANIC, EXCLUSIVE DEAL"
-                          className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#609f00] font-bold text-[#488710]"
-                        />
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Choose the page users will automatically navigate to when clicking this banner on the website.
+                        </p>
                       </div>
 
-                      <div>
-                        <label className="block font-bold text-gray-700 mb-1.5 uppercase tracking-wider">
-                          3. Active Status
-                        </label>
-                        <select
-                          value={slideStatus}
-                          onChange={(e) => setSlideStatus(e.target.value as 'Active' | 'Inactive')}
-                          className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#609f00] font-bold text-gray-800 cursor-pointer"
+                      {/* Selection Option Grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-extrabold">
+                        {/* Option 1: Category */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTargetType('category');
+                            if (storeCategories.length > 0) {
+                              const firstCat = storeCategories[0].name;
+                              setSelectedCategoryRoute(firstCat);
+                              setSlideButtonLink(`/category/${encodeURIComponent(firstCat)}`);
+                            }
+                          }}
+                          className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                            targetType === 'category'
+                              ? 'bg-[#f0f9e8] border-[#609f00] text-[#386b0c] shadow-xs'
+                              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                          }`}
                         >
-                          <option value="Active">● Active (Show on Homepage)</option>
-                          <option value="Inactive">● Inactive (Hide from Homepage)</option>
-                        </select>
+                          <FolderTree className="w-5 h-5 text-[#609f00]" />
+                          <span>Category Page</span>
+                        </button>
+
+                        {/* Option 2: Product */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTargetType('product');
+                            if (storeProducts.length > 0) {
+                              const firstProdId = storeProducts[0].id || storeProducts[0]._id || '';
+                              setSelectedProductRoute(firstProdId);
+                              setSlideButtonLink(`/product/${firstProdId}`);
+                            }
+                          }}
+                          className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                            targetType === 'product'
+                              ? 'bg-blue-50 border-blue-500 text-blue-800 shadow-xs'
+                              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <ShoppingBag className="w-5 h-5 text-blue-600" />
+                          <span>Product Page</span>
+                        </button>
+
+                        {/* Option 3: Game / Special Page */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTargetType('game');
+                            setSlideButtonLink(selectedGameRoute || '/catch-the-gift');
+                          }}
+                          className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                            targetType === 'game'
+                              ? 'bg-purple-50 border-purple-500 text-purple-800 shadow-xs'
+                              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <Gamepad2 className="w-5 h-5 text-purple-600" />
+                          <span>Game / Rewards</span>
+                        </button>
+
+                        {/* Option 4: Custom Link */}
+                        <button
+                          type="button"
+                          onClick={() => setTargetType('custom')}
+                          className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                            targetType === 'custom'
+                              ? 'bg-amber-50 border-amber-500 text-amber-800 shadow-xs'
+                              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <ExternalLink className="w-5 h-5 text-amber-600" />
+                          <span>Custom Route</span>
+                        </button>
+                      </div>
+
+                      {/* Destination Dynamic Controls */}
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 text-xs space-y-2">
+                        {targetType === 'category' && (
+                          <div>
+                            <label className="block font-bold text-gray-700 mb-1.5">Select Store Category:</label>
+                            <select
+                              value={selectedCategoryRoute}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setSelectedCategoryRoute(val);
+                                setSlideButtonLink(`/category/${encodeURIComponent(val)}`);
+                              }}
+                              className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl font-bold text-gray-900 focus:outline-none focus:border-[#609f00] cursor-pointer"
+                            >
+                              {storeCategories.length === 0 ? (
+                                <option value="">No categories found. Create a category first.</option>
+                              ) : (
+                                storeCategories.map((cat) => (
+                                  <option key={cat.id || cat.name} value={cat.name}>
+                                    📁 Category: {cat.name}
+                                  </option>
+                                ))
+                              )}
+                            </select>
+                          </div>
+                        )}
+
+                        {targetType === 'product' && (
+                          <div>
+                            <label className="block font-bold text-gray-700 mb-1.5">Select Specific Product:</label>
+                            <select
+                              value={selectedProductRoute}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setSelectedProductRoute(val);
+                                setSlideButtonLink(`/product/${val}`);
+                              }}
+                              className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl font-bold text-gray-900 focus:outline-none focus:border-blue-500 cursor-pointer"
+                            >
+                              {storeProducts.length === 0 ? (
+                                <option value="">No products found. Add products first.</option>
+                              ) : (
+                                storeProducts.map((prod) => {
+                                  const pId = prod.id || prod._id || '';
+                                  return (
+                                    <option key={pId} value={pId}>
+                                      🛍️ Product: {prod.name} — (₹{prod.price})
+                                    </option>
+                                  );
+                                })
+                              )}
+                            </select>
+                          </div>
+                        )}
+
+                        {targetType === 'game' && (
+                          <div>
+                            <label className="block font-bold text-gray-700 mb-1.5">Select Game / Rewards Page:</label>
+                            <select
+                              value={selectedGameRoute}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setSelectedGameRoute(val);
+                                setSlideButtonLink(val);
+                              }}
+                              className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl font-bold text-gray-900 focus:outline-none focus:border-purple-500 cursor-pointer"
+                            >
+                              <option value="/catch-the-gift">🎁 Catch the Gift Game (/catch-the-gift)</option>
+                              <option value="/play-and-win">🕹️ Play & Win Hub (/play-and-win)</option>
+                              <option value="/points">⭐ Points & Rewards (/points)</option>
+                            </select>
+                          </div>
+                        )}
+
+                        {targetType === 'custom' && (
+                          <div>
+                            <label className="block font-bold text-gray-700 mb-1.5">Enter Custom Route / Page Link:</label>
+                            <input
+                              type="text"
+                              value={slideButtonLink}
+                              onChange={(e) => setSlideButtonLink(e.target.value)}
+                              placeholder="e.g. /shop, /cart, /orders, /checkout, /addresses"
+                              className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl font-bold text-gray-900 focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
+                        )}
+
+                        <div className="pt-1.5 text-[11px] font-bold text-emerald-700 flex items-center gap-1.5">
+                          <span>Banner Click Navigation URL:</span>
+                          <code className="bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-mono text-emerald-800">
+                            {slideButtonLink || '/shop'}
+                          </code>
+                        </div>
                       </div>
                     </div>
 
-                    {/* 3. MAIN TITLE */}
-                    <div className="text-xs">
-                      <label className="block font-bold text-gray-700 mb-1.5 uppercase tracking-wider">
-                        4. Main Title / Heading
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={slideHeading}
-                        onChange={(e) => setSlideHeading(e.target.value)}
-                        placeholder="e.g. SHOP. PLAY. EARN REWARDS!"
-                        className="w-full px-3.5 py-2.5 text-sm font-extrabold bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#609f00]"
-                      />
-                    </div>
+                    {/* 3. ACTIVE STATUS & ADMIN REFERENCE DETAILS */}
+                    <div className="space-y-4 bg-gray-50/50 p-5 rounded-2xl border border-gray-200 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block font-bold text-gray-700 mb-1.5 uppercase tracking-wider">
+                            3. Active Status
+                          </label>
+                          <select
+                            value={slideStatus}
+                            onChange={(e) => setSlideStatus(e.target.value as 'Active' | 'Inactive')}
+                            className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#609f00] font-bold text-gray-800 cursor-pointer"
+                          >
+                            <option value="Active">● Active (Show on Homepage)</option>
+                            <option value="Inactive">● Inactive (Hide from Homepage)</option>
+                          </select>
+                        </div>
 
-                    {/* 4. SUBHEADING */}
-                    <div className="text-xs">
-                      <label className="block font-bold text-gray-700 mb-1.5 uppercase tracking-wider">
-                        5. Sub-Heading / Description
-                      </label>
-                      <textarea
-                        rows={3}
-                        required
-                        value={slideSubheading}
-                        onChange={(e) => setSlideSubheading(e.target.value)}
-                        placeholder="e.g. Shop your favorites, play fun games and earn exciting rewards every day!"
-                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#609f00]"
-                      />
-                    </div>
+                        <div>
+                          <label className="block font-bold text-gray-700 mb-1.5 uppercase tracking-wider">
+                            Admin Reference Title (Internal Only)
+                          </label>
+                          <input
+                            type="text"
+                            value={slideHeading}
+                            onChange={(e) => setSlideHeading(e.target.value)}
+                            placeholder="e.g. Summer Promo Banner"
+                            className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#609f00]"
+                          />
+                        </div>
+                      </div>
 
-                    {/* 5. BUTTON TEXT & LINK */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                      <div>
-                        <label className="block font-bold text-gray-700 mb-1.5 uppercase tracking-wider">
-                          Button Text
-                        </label>
-                        <input
-                          type="text"
-                          value={slideButtonText}
-                          onChange={(e) => setSlideButtonText(e.target.value)}
-                          placeholder="e.g. Shop Now"
-                          className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#609f00]"
-                        />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                        <div>
+                          <label className="block font-bold text-gray-500 mb-1 uppercase tracking-wider text-[11px]">
+                            Tagline / Meta Tag (Admin Reference)
+                          </label>
+                          <input
+                            type="text"
+                            value={slideMetaTag}
+                            onChange={(e) => setSlideMetaTag(e.target.value)}
+                            placeholder="e.g. SPECIAL OFFER"
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-gray-600"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block font-bold text-gray-500 mb-1 uppercase tracking-wider text-[11px]">
+                            Description (Admin Reference)
+                          </label>
+                          <input
+                            type="text"
+                            value={slideSubheading}
+                            onChange={(e) => setSlideSubheading(e.target.value)}
+                            placeholder="e.g. Summer sale promo description"
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-gray-600"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="block font-bold text-gray-700 mb-1.5 uppercase tracking-wider">
-                          Button Link
-                        </label>
-                        <input
-                          type="text"
-                          value={slideButtonLink}
-                          onChange={(e) => setSlideButtonLink(e.target.value)}
-                          placeholder="e.g. /shop"
-                          className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#609f00]"
-                        />
-                      </div>
+                      <p className="text-[10px] text-gray-400 italic">
+                        * Note: Admin reference title & description details are stored in backend for your reference and are not overlaid on the frontend image.
+                      </p>
                     </div>
 
                     {/* FORM ACTION BUTTONS */}

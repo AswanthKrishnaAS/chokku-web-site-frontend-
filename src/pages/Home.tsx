@@ -186,62 +186,27 @@ export const Home: React.FC = () => {
             >
               {slides.map((slide, idx) => (
                 <div key={slide.id || idx} className="w-full shrink-0 relative flex items-center">
-                  <img
-                    src={slide.image || heroImg}
-                    alt={slide.heading || 'Chokku Store Banner'}
-                    className="w-full h-[200px] xs:h-[240px] sm:h-[400px] md:h-[500px] lg:h-[580px] object-cover object-center block"
-                    onError={(e) => {
-                      const target = e.currentTarget;
-                      if (target.src !== window.location.origin + '/img.png') {
-                        target.src = '/img.png';
-                      }
-                    }}
-                  />
-
-                  {/* Overlaid Responsive Content matching Image 2 */}
-                  <div className="absolute inset-0 flex flex-col justify-center px-4 sm:px-10 md:px-14 z-10 pointer-events-none">
-                    <div className="max-w-xs sm:max-w-md space-y-1.5 sm:space-y-3 pointer-events-auto">
-                      {/* Meta Tag Heading Badge */}
-                      {slide.metaTag && (
-                        <div className="inline-block bg-[#488710] text-white text-[9px] xs:text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-xs">
-                          {slide.metaTag}
-                        </div>
+                  <Link to={slide.buttonLink || '/shop'} className="w-full block cursor-pointer transition-opacity hover:opacity-95">
+                    <picture className="w-full">
+                      {(slide.desktopImage || slide.image) && (
+                        <source media="(min-width: 640px)" srcSet={slide.desktopImage || slide.image} />
                       )}
-
-                      {/* Headline */}
-                      <div className="text-xl xs:text-2xl sm:text-4xl md:text-5xl font-black tracking-tight leading-tight text-[#488710]">
-                        {slide.heading || 'ZXCZXC'}
-                      </div>
-
-                      {/* Subheadline Pill */}
-                      {slide.subheading && (
-                        <div>
-                          <span className="inline-block bg-gray-100/90 backdrop-blur-xs text-gray-800 text-[10px] sm:text-xs font-bold px-2.5 py-0.5 sm:py-1 rounded-md border border-gray-200 shadow-2xs">
-                            {slide.subheading}
-                          </span>
-                        </div>
+                      {(slide.mobileImage || slide.image) && (
+                        <source media="(max-width: 639px)" srcSet={slide.mobileImage || slide.image} />
                       )}
-
-                      {/* Action Buttons */}
-                      <div className="flex items-center gap-2 pt-1 sm:pt-2">
-                        <Link
-                          to={slide.buttonLink || '/shop'}
-                          className="inline-flex items-center gap-1 bg-[#488710] hover:bg-[#386b0c] text-white font-extrabold text-[10px] sm:text-sm px-3.5 sm:px-6 py-1.5 sm:py-2.5 rounded-full shadow-md transition-all hover:scale-105 active:scale-95 uppercase"
-                        >
-                          <span>{slide.buttonText || 'SHOP NOW'}</span>
-                          <ArrowRight className="w-3 h-3 sm:w-4 sm:h-4" />
-                        </Link>
-
-                        <Link
-                          to="/play-and-win"
-                          className="inline-flex items-center gap-1 bg-white/95 hover:bg-white text-[#488710] border-2 border-[#488710] font-extrabold text-[10px] sm:text-sm px-3.5 sm:px-6 py-1.5 sm:py-2.5 rounded-full shadow-md transition-all hover:scale-105 active:scale-95 uppercase"
-                        >
-                          <span>PLAY &amp; WIN</span>
-                          <Gamepad2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
+                      <img
+                        src={slide.desktopImage || slide.mobileImage || slide.image || heroImg}
+                        alt={slide.heading || 'Chokku Store Banner'}
+                        className="w-full h-auto sm:h-[400px] md:h-[500px] lg:h-[580px] object-contain sm:object-cover block rounded-2xl sm:rounded-3xl"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          if (target.src !== window.location.origin + '/img.png') {
+                            target.src = '/img.png';
+                          }
+                        }}
+                      />
+                    </picture>
+                  </Link>
                 </div>
               ))}
             </div>

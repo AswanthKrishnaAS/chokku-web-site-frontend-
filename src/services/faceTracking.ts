@@ -87,7 +87,7 @@ export class FaceTrackingPipeline {
       scale: config.scale,
       rotationOffset: 0,
     };
-    const rawEarringAnchors = primaryFace 
+    const rawEarringAnchors = primaryFace
       ? getEarringAnchorPoints(primaryFace, dims, smoothedHeadPose, earringConfig, isMirrored)
       : { left: null, right: null, faceScale: 1.0 };
 

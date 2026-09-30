@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Raleway', sans-serif;
+  --font-sans: 'Josefin Sans', sans-serif;
   --color-brand-green: #64A901;
   --color-brand-green-hover: #548f01;
   --color-brand-blue: #01589D;
@@ -12,12 +12,12 @@
 
 @layer base {
   * {
-    font-family: 'Raleway', sans-serif;
+    font-family: 'Josefin Sans', sans-serif;
   }
   body {
     background-color: #ffffff;
     color: #1f2937;
-    font-family: 'Raleway', sans-serif;
+    font-family: 'Josefin Sans', sans-serif;
   }
 }
 
