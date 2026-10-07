@@ -14,6 +14,31 @@ export interface TryOnConfig {
   rotationOffset: number;
 }
 
+export interface ProductReview {
+  id: string;
+  customerName: string;
+  profileImage?: string;
+  rating: number;
+  comment: string;
+  date: string;
+  image?: string;
+  images?: string[];
+}
+
+export interface SizeVariant {
+  size: string;
+  price: number;
+  originalPrice?: number;
+  isAvailable?: boolean;
+}
+
+export interface MoreInformation {
+  manufacturer?: string;
+  importer?: string;
+  packer?: string;
+  netWeight?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -29,7 +54,13 @@ export interface Product {
   galleryImages: string[];
   description: string;
   stock: number;
-  specifications: Record<string, string>;
+  specifications?: Record<string, string>;
+  highlights?: string[];
+  additionalDetails?: string;
+  moreInformation?: MoreInformation;
+  sizes?: string[];
+  sizeVariants?: SizeVariant[];
+  isAddPriceEnabled?: boolean;
   isFeatured?: boolean;
   isNewArrival?: boolean;
   isBestSeller?: boolean;
@@ -44,6 +75,7 @@ export interface Product {
   tryOnSize?: 'Small' | 'Medium' | 'Large';
   tryOnScale?: number;
   tryOnConfig?: TryOnConfig;
+  reviews?: ProductReview[];
 }
 
 export interface CartItem {

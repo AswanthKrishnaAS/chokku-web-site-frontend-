@@ -166,14 +166,17 @@ export const Orders: React.FC = () => {
                         key={item.id || item.product?.id || idx}
                         className="flex items-center gap-3 p-2.5 bg-gray-50/80 rounded-2xl border border-gray-100"
                       >
-                        <img
-                          src={itemImage}
-                          alt={itemName}
-                          onError={(e) => {
-                            (e.target as HTMLElement).setAttribute('src', 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200');
-                          }}
-                          className="w-12 h-12 object-cover rounded-xl border border-gray-200 bg-white shrink-0"
-                        />
+                        {itemImage ? (
+                          <img
+                            src={itemImage}
+                            alt={itemName}
+                            className="w-12 h-12 object-cover rounded-xl border border-gray-200 bg-white shrink-0"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-xl border border-gray-200 bg-emerald-50 text-[#488710] font-bold flex items-center justify-center shrink-0 text-xs">
+                            {itemName.charAt(0)}
+                          </div>
+                        )}
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-bold text-gray-900 truncate">
                             {itemName}

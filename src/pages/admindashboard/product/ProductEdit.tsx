@@ -20,12 +20,8 @@ import {
 import { useProducts } from '../../../context/ProductContext';
 import { useCategories } from '../../../context/CategoryContext';
 import { useToast } from '../../../context/ToastContext';
+import { SizeVariant, MoreInformation } from '../../../types';
 import { AdminLayout } from '../Sidebar';
-
-interface SpecRow {
-  key: string;
-  value: string;
-}
 
 export const ProductEdit: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -44,6 +40,27 @@ export const ProductEdit: React.FC = () => {
   const [discountTag, setDiscountTag] = useState('');
   const [description, setDescription] = useState('');
   
+  // Product Highlights, Additional Details, and Sizes
+  const [highlights, setHighlights] = useState<string[]>([]);
+  const [newHighlight, setNewHighlight] = useState('');
+  const [additionalDetails, setAdditionalDetails] = useState('');
+  const [availableSizes, setAvailableSizes] = useState<string[]>([]);
+  const [newSize, setNewSize] = useState('');
+
+  // Size-Wise Pricing & Variants State
+  const [sizeVariants, setSizeVariants] = useState<SizeVariant[]>([]);
+  const [isAddPriceEnabled, setIsAddPriceEnabled] = useState<boolean>(false);
+  const [customVariantSize, setCustomVariantSize] = useState('');
+  const [customVariantPrice, setCustomVariantPrice] = useState('');
+
+  // More Information State (Manufacturer & Supplier Compliance)
+  const [moreInformation, setMoreInformation] = useState<MoreInformation>({
+    manufacturer: '',
+    importer: '',
+    packer: '',
+    netWeight: ''
+  });
+
   const [isFeatured, setIsFeatured] = useState(false);
   const [isNewArrival, setIsNewArrival] = useState(false);
   const [isBestSeller, setIsBestSeller] = useState(false);
@@ -55,7 +72,6 @@ export const ProductEdit: React.FC = () => {
   const [tryOnType, setTryOnType] = useState<'Earrings' | 'Necklace' | 'Dress' | 'Bangle' | 'Shoes' | 'Glasses' | 'Other'>('Earrings');
   const [tryOnSize, setTryOnSize] = useState<'Small' | 'Medium' | 'Large'>('Medium');
 
-  const [specs, setSpecs] = useState<SpecRow[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -77,6 +93,40 @@ export const ProductEdit: React.FC = () => {
       setDiscountTag(targetProduct.discountTag || '');
       setDescription(targetProduct.description || '');
 
+      setHighlights(Array.isArray(targetProduct.highlights) ? targetProduct.highlights : []);
+      setAdditionalDetails(targetProduct.additionalDetails || '');
+      setAvailableSizes(Array.isArray(targetProduct.sizes) ? targetProduct.sizes : ['Free Size']);
+
+      if (Array.isArray(targetProduct.sizeVariants) && targetProduct.sizeVariants.length > 0) {
+        setSizeVariants(targetProduct.sizeVariants);
+      } else if (Array.isArray(targetProduct.sizes) && targetProduct.sizes.length > 0) {
+        const baseP = targetProduct.price || 271;
+        setSizeVariants(
+          targetProduct.sizes.map((s, i) => ({
+            size: s,
+            price: baseP + i * 10,
+            originalPrice: Math.round((baseP + i * 10) * 1.25),
+            isAvailable: true
+          }))
+        );
+      }
+
+      if (targetProduct.isAddPriceEnabled !== undefined) {
+        setIsAddPriceEnabled(Boolean(targetProduct.isAddPriceEnabled));
+      } else if (Array.isArray(targetProduct.sizeVariants) && targetProduct.sizeVariants.length > 1) {
+        const firstP = targetProduct.sizeVariants[0]?.price;
+        setIsAddPriceEnabled(targetProduct.sizeVariants.some((v) => v.price > 0 && v.price !== firstP));
+      }
+
+      if (targetProduct.moreInformation) {
+        setMoreInformation({
+          manufacturer: targetProduct.moreInformation.manufacturer || '',
+          importer: targetProduct.moreInformation.importer || '',
+          packer: targetProduct.moreInformation.packer || '',
+          netWeight: targetProduct.moreInformation.netWeight || ''
+        });
+      }
+
       setIsFeatured(Boolean(targetProduct.isFeatured));
       setIsNewArrival(Boolean(targetProduct.isNewArrival));
       setIsBestSeller(Boolean(targetProduct.isBestSeller));
@@ -96,21 +146,13 @@ export const ProductEdit: React.FC = () => {
           ? [targetProduct.image]
           : [];
       setPreviews(initialPreviews);
-
-      // Specifications
-      if (targetProduct.specifications && typeof targetProduct.specifications === 'object') {
-        const specList = Object.entries(targetProduct.specifications).map(([key, value]) => ({ key, value }));
-        setSpecs(specList.length > 0 ? specList : [{ key: 'Brand', value: '' }]);
-      } else {
-        setSpecs([{ key: 'Brand', value: '' }]);
-      }
     }
   }, [targetProduct, id, categories]);
 
   // Handle standard catalog images
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const selectedFiles = Array.from(e.target.files);
+      const selectedFiles = Array.from(e.target.files) as File[];
       setFiles((prev) => [...prev, ...selectedFiles]);
 
       const newPreviews = selectedFiles.map((file) => URL.createObjectURL(file));
@@ -126,7 +168,7 @@ export const ProductEdit: React.FC = () => {
   // Handle Try On PNG images
   const handleTryOnFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const selectedFiles = Array.from(e.target.files);
+      const selectedFiles = Array.from(e.target.files) as File[];
       const pngFiles = selectedFiles.filter(
         (file) => file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')
       );
@@ -155,21 +197,91 @@ export const ProductEdit: React.FC = () => {
     setTryOnPreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Specs handlers
-  const handleAddSpecRow = () => {
-    setSpecs((prev) => [...prev, { key: '', value: '' }]);
+  // Highlights & Sizes Helpers
+  const handleAddHighlight = () => {
+    if (newHighlight.trim()) {
+      setHighlights((prev) => [...prev, newHighlight.trim()]);
+      setNewHighlight('');
+    }
   };
 
-  const handleSpecChange = (index: number, field: 'key' | 'value', value: string) => {
-    setSpecs((prev) => {
-      const copy = [...prev];
-      copy[index][field] = value;
-      return copy;
-    });
+  // Size Variant Helpers
+  const handleUpdateVariantPrice = (sizeName: string, newPrice: number) => {
+    setSizeVariants((prev) =>
+      prev.map((sv) =>
+        sv.size.toLowerCase() === sizeName.toLowerCase()
+          ? { ...sv, price: newPrice, originalPrice: Math.round(newPrice * 1.25) }
+          : sv
+      )
+    );
   };
 
-  const handleRemoveSpecRow = (index: number) => {
-    setSpecs((prev) => prev.filter((_, i) => i !== index));
+  const handleToggleVariantAvailable = (sizeName: string) => {
+    setSizeVariants((prev) =>
+      prev.map((sv) =>
+        sv.size.toLowerCase() === sizeName.toLowerCase()
+          ? { ...sv, isAvailable: sv.isAvailable === false ? true : false }
+          : sv
+      )
+    );
+  };
+
+  const handleAddCustomVariant = () => {
+    if (!customVariantSize.trim()) return;
+    const sz = customVariantSize.trim();
+    const pr = Number(customVariantPrice) || Number(sellingPrice) || 271;
+    const existing = sizeVariants.find((sv) => sv.size.toLowerCase() === sz.toLowerCase());
+    if (existing) {
+      handleUpdateVariantPrice(existing.size, pr);
+    } else {
+      const newVar: SizeVariant = {
+        size: sz,
+        price: pr,
+        originalPrice: Math.round(pr * 1.25),
+        isAvailable: true
+      };
+      setSizeVariants((prev) => [...prev.filter((sv) => sv.size.toLowerCase() !== sz.toLowerCase()), newVar]);
+      setAvailableSizes((prev) => [...prev.filter((s) => s.toLowerCase() !== sz.toLowerCase()), sz]);
+    }
+    setCustomVariantSize('');
+    setCustomVariantPrice('');
+  };
+
+  const handleRemoveHighlight = (index: number) => {
+    setHighlights((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddSize = () => {
+    if (newSize.trim()) {
+      const sz = newSize.trim();
+      const isAlreadyAdded = sizeVariants.some((sv) => sv.size.toLowerCase() === sz.toLowerCase());
+      if (!isAlreadyAdded) {
+        const baseP = Number(sellingPrice) || 271;
+        setAvailableSizes((prev) => [...prev.filter((s) => s.toLowerCase() !== sz.toLowerCase()), sz]);
+        setSizeVariants((prev) => [...prev.filter((sv) => sv.size.toLowerCase() !== sz.toLowerCase()), { size: sz, price: baseP, originalPrice: Math.round(baseP * 1.25), isAvailable: true }]);
+      }
+      setNewSize('');
+    }
+  };
+
+  const handleToggleSize = (size: string) => {
+    const isAdded = sizeVariants.some((sv) => sv.size.toLowerCase() === size.toLowerCase());
+    if (isAdded) {
+      // Toggle OFF: remove from sizeVariants and availableSizes
+      setSizeVariants((prev) => prev.filter((sv) => sv.size.toLowerCase() !== size.toLowerCase()));
+      setAvailableSizes((prev) => prev.filter((s) => s.toLowerCase() !== size.toLowerCase()));
+    } else {
+      // Toggle ON: add to sizeVariants and availableSizes
+      const baseP = Number(sellingPrice) || 271;
+      const newVar: SizeVariant = {
+        size: size,
+        price: baseP,
+        originalPrice: Math.round(baseP * 1.25),
+        isAvailable: true
+      };
+      setSizeVariants((prev) => [...prev.filter((sv) => sv.size.toLowerCase() !== size.toLowerCase()), newVar]);
+      setAvailableSizes((prev) => [...prev.filter((s) => s.toLowerCase() !== size.toLowerCase()), size]);
+    }
   };
 
   // Submit Edit Form
@@ -212,14 +324,6 @@ export const ProductEdit: React.FC = () => {
       }
     }
 
-    // Build specs object
-    const specMap: Record<string, string> = {};
-    specs.forEach((s) => {
-      if (s.key.trim()) {
-        specMap[s.key.trim()] = s.value.trim();
-      }
-    });
-
     const categoryObj = categories.find((c) => c.slug === category);
     const categoryName = categoryObj ? categoryObj.name : 'General';
 
@@ -233,7 +337,12 @@ export const ProductEdit: React.FC = () => {
       discountTag: discountTag.trim(),
       description: description.trim(),
       stock: Number(stock) || 0,
-      specifications: specMap,
+      highlights,
+      additionalDetails: additionalDetails.trim(),
+      moreInformation,
+      sizes: availableSizes,
+      sizeVariants,
+      isAddPriceEnabled,
       image: finalGalleryImages[0] || '',
       galleryImages: finalGalleryImages,
       isFeatured,
@@ -330,7 +439,7 @@ export const ProductEdit: React.FC = () => {
             <span>Edit Product: {targetProduct.name}</span>
           </h1>
           <p className="text-xs text-gray-500 font-medium">
-            Update product details, pricing, Try On PNG overlays, and specifications.
+            Update product details, pricing, Try On PNG overlays, highlights, and sizes.
           </p>
         </div>
 
@@ -651,51 +760,203 @@ export const ProductEdit: React.FC = () => {
             </div>
           </div>
 
-          {/* Specifications */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#488710] flex items-center gap-2">
-                <Sparkles className="w-4 h-4" />
-                <span>Specifications</span>
-              </h2>
+          {/* Size-Wise Pricing, Product Highlights & Compliance Info */}
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-2xs space-y-6">
+            <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#488710] flex items-center gap-2 border-b border-gray-100 pb-3">
+              <Sparkles className="w-4 h-4" />
+              <span>Size-Wise Pricing, Product Highlights & Compliance Info</span>
+            </h2>
 
-              <button
-                type="button"
-                onClick={handleAddSpecRow}
-                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Row</span>
-              </button>
-            </div>
-
-            <div className="space-y-2 pt-1">
-              {specs.map((spec, idx) => (
-                <div key={idx} className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    value={spec.key}
-                    onChange={(e) => handleSpecChange(idx, 'key', e.target.value)}
-                    placeholder="Attribute Name"
-                    className="flex-1 px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:border-[#609f00] focus:bg-white font-medium"
-                  />
-                  <input
-                    type="text"
-                    value={spec.value}
-                    onChange={(e) => handleSpecChange(idx, 'value', e.target.value)}
-                    placeholder="Value"
-                    className="flex-1 px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:border-[#609f00] focus:bg-white font-medium"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveSpecRow(idx)}
-                    className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-200 text-xs transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+            {/* Select Size & Size-Wise Pricing */}
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-gray-800">
+                    Select Size &amp; Size-Wise Pricing
+                  </label>
+                  <span className="text-[11px] font-semibold text-emerald-700">
+                    Select sizes for this product. Check "Add Price" to specify custom prices per size.
+                  </span>
                 </div>
-              ))}
+                <label className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors self-start sm:self-auto">
+                  <input
+                    type="checkbox"
+                    checked={isAddPriceEnabled}
+                    onChange={(e) => setIsAddPriceEnabled(e.target.checked)}
+                    className="w-4 h-4 text-[#609f00] rounded focus:ring-[#609f00] cursor-pointer"
+                  />
+                  <span className="text-xs font-extrabold text-gray-900 select-none">Add Price</span>
+                </label>
+              </div>
+
+              {/* Quick Select Standard Sizes */}
+              <div className="flex flex-wrap items-center gap-1.5 pb-1">
+                <span className="text-[11px] font-bold text-gray-500 mr-1">Quick Add Size:</span>
+                {['Free Size', 'S', 'M', 'L', 'XL', 'XXL', '28', '30', '32', 'IND-6', 'IND-7', 'IND-8'].map((sz) => {
+                  const isAdded = sizeVariants.some((sv) => sv.size.toLowerCase() === sz.toLowerCase());
+                  return (
+                    <button
+                      key={sz}
+                      type="button"
+                      onClick={() => handleToggleSize(sz)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border transition-all cursor-pointer ${
+                        isAdded
+                          ? 'bg-[#609f00] text-white border-[#528900] shadow-2xs'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                      }`}
+                    >
+                      {sz} {isAdded ? '✓' : '+'}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Size Variants Grid */}
+              {sizeVariants.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                  {sizeVariants.map((sv) => (
+                    <div
+                      key={sv.size}
+                      className={`p-3 rounded-xl border transition-all space-y-1.5 ${
+                        sv.isAvailable !== false
+                          ? 'bg-white border-gray-200 shadow-2xs'
+                          : 'bg-gray-100 border-gray-200 opacity-60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-gray-900">{sv.size}</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleVariantAvailable(sv.size)}
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded cursor-pointer ${
+                              sv.isAvailable !== false
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {sv.isAvailable !== false ? 'In Stock' : 'Out of Stock'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSizeVariants((prev) => prev.filter((item) => item.size.toLowerCase() !== sv.size.toLowerCase()));
+                              setAvailableSizes((prev) => prev.filter((s) => s.toLowerCase() !== sv.size.toLowerCase()));
+                            }}
+                            className="text-gray-400 hover:text-rose-500 p-0.5"
+                            title="Remove size"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {isAddPriceEnabled && (
+                        <div className="flex items-center gap-1 pt-1">
+                          <span className="text-xs font-bold text-gray-500">₹</span>
+                          <input
+                            type="number"
+                            value={sv.price}
+                            onChange={(e) => handleUpdateVariantPrice(sv.size, Number(e.target.value))}
+                            placeholder="Price"
+                            className="w-full px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs font-black text-gray-900 focus:outline-none focus:border-[#609f00]"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 bg-gray-50 border border-dashed border-gray-300 rounded-2xl text-center text-xs text-gray-500">
+                  No sizes added yet. Click a quick add size above or add a custom size variant below.
+                </div>
+              )}
+
+              {/* Add Custom Size Variant */}
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                <input
+                  type="text"
+                  value={customVariantSize}
+                  onChange={(e) => setCustomVariantSize(e.target.value)}
+                  placeholder="Custom Size (e.g. 34, XXXL)"
+                  className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 font-medium focus:outline-none focus:border-[#609f00] min-w-[140px]"
+                />
+                {isAddPriceEnabled && (
+                  <input
+                    type="number"
+                    value={customVariantPrice}
+                    onChange={(e) => setCustomVariantPrice(e.target.value)}
+                    placeholder="Price (₹)"
+                    className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 font-medium focus:outline-none focus:border-[#609f00] w-24"
+                  />
+                )}
+                <button
+                  type="button"
+                  onClick={handleAddCustomVariant}
+                  className="px-4 py-2 bg-[#609f00] hover:bg-[#528900] text-white rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  + Add Size Variant
+                </button>
+              </div>
             </div>
+
+            {/* Product Highlights */}
+            <div className="space-y-2 pt-3 border-t border-gray-100">
+              <label className="block text-xs font-bold uppercase text-gray-800">
+                Product Highlights
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newHighlight}
+                  onChange={(e) => setNewHighlight(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddHighlight(); } }}
+                  placeholder="Add highlight (e.g. Color: Black or Fabric: Cotton)"
+                  className="flex-1 px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 font-medium focus:outline-none focus:border-[#609f00]"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddHighlight}
+                  className="px-4 py-2 bg-[#609f00] hover:bg-[#528900] text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Highlight</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                {highlights.map((hl, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800">
+                    <span className="flex items-center gap-2 font-semibold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#609f00]" />
+                      {hl}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveHighlight(idx)}
+                      className="text-gray-400 hover:text-rose-500 transition-colors p-1 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* More Information */}
+            <div className="space-y-1.5 pt-3 border-t border-gray-100">
+              <label className="block text-xs font-bold uppercase text-gray-800">
+                More Information
+              </label>
+              <textarea
+                rows={3}
+                value={moreInformation.manufacturer || ''}
+                onChange={(e) => setMoreInformation((prev) => ({ ...prev, manufacturer: e.target.value }))}
+                placeholder="e.g. AHMAD KHAN 18/1 Sarojini Naidu Park Shastri Nagar East Delhi Gali No.1 Near By Kali Mata Mandir 110031"
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 font-medium focus:outline-none focus:border-[#609f00] leading-relaxed"
+              />
+            </div>
+
           </div>
 
           {/* Homepage Display Flags */}

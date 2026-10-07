@@ -2,15 +2,20 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 export interface HomeSlideItem {
   id: string;
+  _id?: string;
   image: string;
   desktopImage?: string;
   mobileImage?: string;
+  linkUrl?: string;
+  metaTitle?: string;
+  metaDescription?: string;
   metaTag: string;
   heading: string;
   subheading: string;
   buttonText?: string;
   buttonLink?: string;
   status?: 'Active' | 'Inactive';
+  sortOrder?: number;
 }
 
 interface WebsiteSettingsContextType {
@@ -23,6 +28,10 @@ interface WebsiteSettingsContextType {
   uploadNavbarLogo: (file: File) => Promise<{ success: boolean; message: string; navbarLogo?: string }>;
   uploadSliderImage: (file: File) => Promise<{ success: boolean; message: string; imageUrl?: string }>;
   saveHomeSliders: (sliders: HomeSlideItem[]) => Promise<{ success: boolean; message: string }>;
+  createSlider: (slideData: Partial<HomeSlideItem>) => Promise<{ success: boolean; message: string; slider?: HomeSlideItem }>;
+  updateSlider: (id: string, slideData: Partial<HomeSlideItem>) => Promise<{ success: boolean; message: string; slider?: HomeSlideItem }>;
+  deleteSlider: (id: string) => Promise<{ success: boolean; message: string }>;
+  toggleSliderStatus: (id: string, status?: 'Active' | 'Inactive') => Promise<{ success: boolean; message: string; slider?: HomeSlideItem }>;
 }
 
 const WebsiteSettingsContext = createContext<WebsiteSettingsContextType | undefined>(undefined);
@@ -64,21 +73,41 @@ export const WebsiteSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     }
   };
 
+  const fetchHomepageSliders = async () => {
+    try {
+      // Try admin endpoint to get all slides (including inactive)
+      const res = await fetch(`${API_URL}/homepage-sliders/admin`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.sliders)) {
+          setHomeSliders(data.sliders);
+          return;
+        }
+      }
+      // Fallback endpoint
+      const fallbackRes = await fetch(`${API_URL}/homepage-sliders`);
+      if (fallbackRes.ok) {
+        const data = await fallbackRes.json();
+        if (data.success && Array.isArray(data.sliders)) {
+          setHomeSliders(data.sliders);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch homepage sliders from homepageSlider collection API:', err);
+    }
+  };
+
   const refreshSettings = async () => {
     try {
       setIsLoading(true);
       const res = await fetch(`${API_URL}/website-settings`);
       if (res.ok) {
         const data = await res.json();
-        if (data.success && data.settings) {
-          if (data.settings.navbarLogo) {
-            setNavbarLogo(data.settings.navbarLogo);
-          }
-          if (Array.isArray(data.settings.homeSliders) && data.settings.homeSliders.length > 0) {
-            setHomeSliders(data.settings.homeSliders);
-          }
+        if (data.success && data.settings && data.settings.navbarLogo) {
+          setNavbarLogo(data.settings.navbarLogo);
         }
       }
+      await fetchHomepageSliders();
     } catch (err) {
       console.warn('Could not fetch website settings from server:', err);
     } finally {
@@ -128,7 +157,7 @@ export const WebsiteSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     formData.append('sliderImage', file);
 
     try {
-      const res = await fetch(`${API_URL}/website-settings/upload-slider-image`, {
+      const res = await fetch(`${API_URL}/homepage-sliders/upload-image`, {
         method: 'POST',
         body: formData,
       });
@@ -155,35 +184,147 @@ export const WebsiteSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     }
   };
 
-  const saveHomeSliders = async (sliders: HomeSlideItem[]) => {
-    setHomeSliders(sliders);
+  const createSlider = async (slideData: Partial<HomeSlideItem>) => {
     try {
-      const res = await fetch(`${API_URL}/website-settings/home-sliders`, {
+      const res = await fetch(`${API_URL}/homepage-sliders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sliders }),
+        body: JSON.stringify(slideData),
       });
 
       const data = await res.json();
-      if (res.ok && data.success) {
-        if (Array.isArray(data.homeSliders)) {
-          setHomeSliders(data.homeSliders);
-        }
+      if (res.ok && data.success && data.slider) {
+        await fetchHomepageSliders();
         return {
           success: true,
-          message: data.message || 'Home sliders saved successfully',
+          message: data.message || 'Homepage slider created successfully',
+          slider: data.slider,
         };
       } else {
         return {
           success: false,
-          message: data.message || 'Failed to save sliders to backend database',
+          message: data.message || 'Failed to create slider',
         };
       }
+    } catch (err: any) {
+      console.error('Create slider error:', err);
+      return {
+        success: false,
+        message: err.message || 'Error creating slider in homepageSlider collection',
+      };
+    }
+  };
+
+  const updateSlider = async (id: string, slideData: Partial<HomeSlideItem>) => {
+    try {
+      const res = await fetch(`${API_URL}/homepage-sliders/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(slideData),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.slider) {
+        await fetchHomepageSliders();
+        return {
+          success: true,
+          message: data.message || 'Homepage slider updated successfully',
+          slider: data.slider,
+        };
+      } else {
+        return {
+          success: false,
+          message: data.message || 'Failed to update slider',
+        };
+      }
+    } catch (err: any) {
+      console.error('Update slider error:', err);
+      return {
+        success: false,
+        message: err.message || 'Error updating slider',
+      };
+    }
+  };
+
+  const toggleSliderStatus = async (id: string, status?: 'Active' | 'Inactive') => {
+    try {
+      const res = await fetch(`${API_URL}/homepage-sliders/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.slider) {
+        await fetchHomepageSliders();
+        return {
+          success: true,
+          message: data.message || 'Slider status updated',
+          slider: data.slider,
+        };
+      } else {
+        return {
+          success: false,
+          message: data.message || 'Failed to update slider status',
+        };
+      }
+    } catch (err: any) {
+      console.error('Toggle slider status error:', err);
+      return {
+        success: false,
+        message: err.message || 'Error updating slider status',
+      };
+    }
+  };
+
+  const deleteSlider = async (id: string) => {
+    try {
+      const res = await fetch(`${API_URL}/homepage-sliders/${id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await fetchHomepageSliders();
+        return {
+          success: true,
+          message: data.message || 'Slider banner deleted successfully',
+        };
+      } else {
+        return {
+          success: false,
+          message: data.message || 'Failed to delete slider banner',
+        };
+      }
+    } catch (err: any) {
+      console.error('Delete slider error:', err);
+      return {
+        success: false,
+        message: err.message || 'Error deleting slider',
+      };
+    }
+  };
+
+  const saveHomeSliders = async (sliders: HomeSlideItem[]) => {
+    setHomeSliders(sliders);
+    try {
+      for (const slide of sliders) {
+        if (slide.id && slide.id.length === 24 && !slide.id.startsWith('slide-')) {
+          await updateSlider(slide.id, slide);
+        } else {
+          await createSlider(slide);
+        }
+      }
+      await fetchHomepageSliders();
+      return {
+        success: true,
+        message: 'Homepage sliders saved to homepageSlider collection',
+      };
     } catch (err: any) {
       console.error('Save home sliders error:', err);
       return {
         success: true,
-        message: 'Saved home sliders locally (Offline Mode)',
+        message: 'Saved sliders locally (Offline Mode)',
       };
     }
   };
@@ -200,6 +341,10 @@ export const WebsiteSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         uploadNavbarLogo,
         uploadSliderImage,
         saveHomeSliders,
+        createSlider,
+        updateSlider,
+        deleteSlider,
+        toggleSliderStatus,
       }}
     >
       {children}

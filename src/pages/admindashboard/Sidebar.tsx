@@ -26,7 +26,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useProducts } from '../../context/ProductContext';
 import { useCategories } from '../../context/CategoryContext';
-import chokkuLogo from '../../assets/img/chokku.png';
+import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 
 interface SidebarProps {
   activeSection?: string;
@@ -243,6 +243,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   activeSection = 'products',
 }) => {
   const { adminUser } = useAuth();
+  const { navbarLogo } = useWebsiteSettings();
   const navigate = useNavigate();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -264,7 +265,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             </button>
 
             <Link to="/admin-dashboard" className="flex items-center gap-2.5">
-              <img src={chokkuLogo} alt="Chokku Store Logo" className="h-10 w-auto object-contain" />
+              {navbarLogo ? (
+                <img src={navbarLogo} alt="Store Logo" className="h-14 sm:h-16 max-h-[64px] w-auto object-contain" />
+              ) : (
+                <span className="text-xl font-black text-[#488710] tracking-tight flex items-center gap-1.5">
+                  <Sparkles className="w-6 h-6 text-[#488710]" />
+                  <span>Chokku Store</span>
+                </span>
+              )}
               <div className="h-6 w-px bg-gray-200 hidden sm:block" />
               <span className="bg-[#eaf8dd] text-[#488710] text-xs font-black px-2.5 py-0.5 rounded-full border border-[#d2ea9d] uppercase tracking-wider hidden sm:inline-block">
                 Admin Panel

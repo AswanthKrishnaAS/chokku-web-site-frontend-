@@ -13,23 +13,29 @@ import {
   Sparkles,
   ChevronRight,
   Info,
-  Shirt
+  Shirt,
+  Link2,
+  ExternalLink,
+  CheckCircle2
 } from 'lucide-react';
 import { useProducts } from '../../../context/ProductContext';
 import { useCategories } from '../../../context/CategoryContext';
 import { useToast } from '../../../context/ToastContext';
+import { SizeVariant, MoreInformation } from '../../../types';
 import { AdminLayout } from '../Sidebar';
-
-interface SpecRow {
-  key: string;
-  value: string;
-}
 
 export const ProductAdd: React.FC = () => {
   const navigate = useNavigate();
-  const { addProductOrUpdate, uploadProductImages, uploadTryOnImages } = useProducts();
+  const { addProductOrUpdate, uploadProductImages, uploadTryOnImages, fetchMeeshoProductDetails } = useProducts();
   const { categories } = useCategories();
   const { addToast } = useToast();
+
+  // Meesho Link Upload State
+  const [useLinkUpload, setUseLinkUpload] = useState(false);
+  const [meeshoUrl, setMeeshoUrl] = useState('');
+  const [isFetchingLink, setIsFetchingLink] = useState(false);
+  const [linkFetchSuccess, setLinkFetchSuccess] = useState(false);
+  const [fetchedImagesReference, setFetchedImagesReference] = useState<string[]>([]);
 
   const [name, setName] = useState('');
   const [category, setCategory] = useState(categories[0]?.slug || 'general');
@@ -38,6 +44,107 @@ export const ProductAdd: React.FC = () => {
   const [stock, setStock] = useState('10');
   const [discountTag, setDiscountTag] = useState('SAVE 20%');
   const [description, setDescription] = useState('');
+
+  // Product Highlights, Additional Details, and Sizes
+  const [highlights, setHighlights] = useState<string[]>([]);
+  const [newHighlight, setNewHighlight] = useState('');
+  const [additionalDetails, setAdditionalDetails] = useState('');
+  const [availableSizes, setAvailableSizes] = useState<string[]>([]);
+  const [newSize, setNewSize] = useState('');
+
+  // Size-Wise Pricing & Variants State
+  const [sizeVariants, setSizeVariants] = useState<SizeVariant[]>([]);
+  const [isAddPriceEnabled, setIsAddPriceEnabled] = useState<boolean>(false);
+  const [customVariantSize, setCustomVariantSize] = useState('');
+  const [customVariantPrice, setCustomVariantPrice] = useState('');
+
+  // More Information State (Manufacturer & Supplier Compliance)
+  const [moreInformation, setMoreInformation] = useState<MoreInformation>({
+    manufacturer: 'AHMAD KHAN 18/1 Sarojini Naidu Park Shastri Nagar East Delhi Gali No.1 Near By Kali Mata Mandir 110031',
+    importer: 'No information available',
+    packer: 'AHMAD KHAN 18/1 Sarojini Naidu Park Shastri Nagar East Delhi Gali No.1 Near By Kali Mata Mandir 110031',
+    netWeight: '200'
+  });
+
+  // Handle Fetch Details from Meesho Product Link
+  const handleFetchMeeshoDetails = async () => {
+    if (!meeshoUrl.trim()) {
+      addToast('Validation Error', 'Please paste a valid Meesho product URL', 'error');
+      return;
+    }
+
+    setIsFetchingLink(true);
+    setLinkFetchSuccess(false);
+
+    const result = await fetchMeeshoProductDetails(meeshoUrl.trim());
+    setIsFetchingLink(false);
+
+    if (result.success && result.data) {
+      const data = result.data;
+      if (data.name) setName(data.name);
+      if (data.description) setDescription(data.description);
+      if (data.price) setSellingPrice(data.price.toString());
+      if (data.originalPrice) setOriginalPrice(data.originalPrice.toString());
+
+      // Auto-match category
+      if (data.category) {
+        const catQuery = data.category.toLowerCase();
+        const matchedCategory = categories.find(
+          (c) => c.slug.toLowerCase() === catQuery || c.name.toLowerCase().includes(catQuery)
+        );
+        if (matchedCategory) {
+          setCategory(matchedCategory.slug);
+        }
+      }
+
+      if (Array.isArray(data.fetchedImages) && data.fetchedImages.length > 0) {
+        setFetchedImagesReference(data.fetchedImages);
+      }
+
+      if (Array.isArray(data.highlights) && data.highlights.length > 0) {
+        setHighlights(data.highlights);
+      }
+      if (data.additionalDetails) {
+        setAdditionalDetails(data.additionalDetails);
+      }
+      if (data.moreInformation) {
+        setMoreInformation({
+          manufacturer: data.moreInformation.manufacturer || '',
+          importer: data.moreInformation.importer || '',
+          packer: data.moreInformation.packer || '',
+          netWeight: data.moreInformation.netWeight || ''
+        });
+      }
+      if (Array.isArray(data.sizeVariants) && data.sizeVariants.length > 0) {
+        setSizeVariants(data.sizeVariants);
+        setAvailableSizes(data.sizeVariants.map((sv) => sv.size));
+      } else if (Array.isArray(data.sizes) && data.sizes.length > 0) {
+        setAvailableSizes(data.sizes);
+        const baseP = Number(data.price) || Number(sellingPrice) || 271;
+        setSizeVariants(
+          data.sizes.map((s, i) => ({
+            size: s,
+            price: baseP + i * 10,
+            originalPrice: Math.round((baseP + i * 10) * 1.25),
+            isAvailable: true
+          }))
+        );
+      }
+
+      setLinkFetchSuccess(true);
+      addToast(
+        'Product Details Fetched!',
+        'Product details pre-filled from Meesho link including sizes, size-wise pricing, highlights, and manufacturer details.',
+        'success'
+      );
+    } else {
+      addToast(
+        'Fetch Warning',
+        result.message || 'Could not fetch Meesho details automatically. Please enter product details manually.',
+        'warning'
+      );
+    }
+  };
   
   // Homepage flags
   const [isFeatured, setIsFeatured] = useState(true);
@@ -51,12 +158,6 @@ export const ProductAdd: React.FC = () => {
   const [tryOnType, setTryOnType] = useState<'Earrings' | 'Necklace' | 'Dress' | 'Bangle' | 'Shoes' | 'Glasses' | 'Other'>('Earrings');
   const [tryOnSize, setTryOnSize] = useState<'Small' | 'Medium' | 'Large'>('Medium');
 
-  // Specifications key-value pairs
-  const [specs, setSpecs] = useState<SpecRow[]>([
-    { key: 'Brand', value: 'Chokku Store' },
-    { key: 'Warranty', value: '1 Year Manufacturer Warranty' }
-  ]);
-
   // Image upload state
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -65,7 +166,7 @@ export const ProductAdd: React.FC = () => {
   // Handle standard catalog file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const selectedFiles = Array.from(e.target.files);
+      const selectedFiles = Array.from(e.target.files) as File[];
       setFiles((prev) => [...prev, ...selectedFiles]);
 
       const newPreviews = selectedFiles.map((file) => URL.createObjectURL(file));
@@ -81,7 +182,7 @@ export const ProductAdd: React.FC = () => {
   // Handle Try On PNG file selection (PNG ONLY, MAX 5)
   const handleTryOnFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const selectedFiles = Array.from(e.target.files);
+      const selectedFiles = Array.from(e.target.files) as File[];
 
       // Enforce PNG filter
       const pngFiles = selectedFiles.filter(
@@ -113,21 +214,91 @@ export const ProductAdd: React.FC = () => {
     setTryOnPreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Specs helper
-  const handleAddSpecRow = () => {
-    setSpecs((prev) => [...prev, { key: '', value: '' }]);
+  // Size Variant Helpers
+  const handleUpdateVariantPrice = (sizeName: string, newPrice: number) => {
+    setSizeVariants((prev) =>
+      prev.map((sv) =>
+        sv.size.toLowerCase() === sizeName.toLowerCase()
+          ? { ...sv, price: newPrice, originalPrice: Math.round(newPrice * 1.25) }
+          : sv
+      )
+    );
   };
 
-  const handleSpecChange = (index: number, field: 'key' | 'value', value: string) => {
-    setSpecs((prev) => {
-      const copy = [...prev];
-      copy[index][field] = value;
-      return copy;
-    });
+  const handleToggleVariantAvailable = (sizeName: string) => {
+    setSizeVariants((prev) =>
+      prev.map((sv) =>
+        sv.size.toLowerCase() === sizeName.toLowerCase()
+          ? { ...sv, isAvailable: sv.isAvailable === false ? true : false }
+          : sv
+      )
+    );
   };
 
-  const handleRemoveSpecRow = (index: number) => {
-    setSpecs((prev) => prev.filter((_, i) => i !== index));
+  const handleAddCustomVariant = () => {
+    if (!customVariantSize.trim()) return;
+    const sz = customVariantSize.trim();
+    const pr = Number(customVariantPrice) || Number(sellingPrice) || 271;
+    const existing = sizeVariants.find((sv) => sv.size.toLowerCase() === sz.toLowerCase());
+    if (existing) {
+      handleUpdateVariantPrice(existing.size, pr);
+    } else {
+      const newVar: SizeVariant = {
+        size: sz,
+        price: pr,
+        originalPrice: Math.round(pr * 1.25),
+        isAvailable: true
+      };
+      setSizeVariants((prev) => [...prev.filter((sv) => sv.size.toLowerCase() !== sz.toLowerCase()), newVar]);
+      setAvailableSizes((prev) => [...prev.filter((s) => s.toLowerCase() !== sz.toLowerCase()), sz]);
+    }
+    setCustomVariantSize('');
+    setCustomVariantPrice('');
+  };
+
+  // Highlights & Sizes Helpers
+  const handleAddHighlight = () => {
+    if (newHighlight.trim()) {
+      setHighlights((prev) => [...prev, newHighlight.trim()]);
+      setNewHighlight('');
+    }
+  };
+
+  const handleRemoveHighlight = (index: number) => {
+    setHighlights((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddSize = () => {
+    if (newSize.trim()) {
+      const sz = newSize.trim();
+      const isAlreadyAdded = sizeVariants.some((sv) => sv.size.toLowerCase() === sz.toLowerCase());
+      if (!isAlreadyAdded) {
+        const baseP = Number(sellingPrice) || 271;
+        setAvailableSizes((prev) => [...prev.filter((s) => s.toLowerCase() !== sz.toLowerCase()), sz]);
+        setSizeVariants((prev) => [...prev.filter((sv) => sv.size.toLowerCase() !== sz.toLowerCase()), { size: sz, price: baseP, originalPrice: Math.round(baseP * 1.25), isAvailable: true }]);
+      }
+      setNewSize('');
+    }
+  };
+
+  const handleToggleSize = (size: string) => {
+    const isAdded = sizeVariants.some((sv) => sv.size.toLowerCase() === size.toLowerCase());
+    if (isAdded) {
+      // Toggle OFF: remove from sizeVariants and availableSizes
+      setSizeVariants((prev) => prev.filter((sv) => sv.size.toLowerCase() !== size.toLowerCase()));
+      setAvailableSizes((prev) => prev.filter((s) => s.toLowerCase() !== size.toLowerCase()));
+    } else {
+      // Toggle ON: add to sizeVariants and availableSizes
+      const baseP = Number(sellingPrice) || 271;
+      const newVar: SizeVariant = {
+        size: size,
+        price: baseP,
+        originalPrice: Math.round(baseP * 1.25),
+        isAvailable: true
+      };
+      setSizeVariants((prev) => [...prev.filter((sv) => sv.size.toLowerCase() !== size.toLowerCase()), newVar]);
+      setAvailableSizes((prev) => [...prev.filter((s) => s.toLowerCase() !== size.toLowerCase()), size]);
+    }
   };
 
   // Submit Handler
@@ -172,14 +343,6 @@ export const ProductAdd: React.FC = () => {
       }
     }
 
-    // 3. Format specifications map
-    const specMap: Record<string, string> = {};
-    specs.forEach((s) => {
-      if (s.key.trim()) {
-        specMap[s.key.trim()] = s.value.trim();
-      }
-    });
-
     const categoryObj = categories.find((c) => c.slug === category);
     const categoryName = categoryObj ? categoryObj.name : 'General';
 
@@ -193,9 +356,14 @@ export const ProductAdd: React.FC = () => {
       discountTag: discountTag.trim(),
       description: description.trim(),
       stock: Number(stock) || 0,
-      specifications: specMap,
-      image: finalGalleryImages[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
-      galleryImages: finalGalleryImages.length > 0 ? finalGalleryImages : ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80'],
+      highlights,
+      additionalDetails: additionalDetails.trim(),
+      moreInformation,
+      sizes: availableSizes,
+      sizeVariants,
+      isAddPriceEnabled,
+      image: finalGalleryImages[0] || (fetchedImagesReference[0] || ''),
+      galleryImages: finalGalleryImages.length > 0 ? finalGalleryImages : fetchedImagesReference,
       isFeatured,
       isNewArrival,
       isBestSeller,
@@ -252,12 +420,126 @@ export const ProductAdd: React.FC = () => {
             </h1>
           </div>
           <p className="text-xs text-gray-500 font-medium">
-            Fill in product details, pricing, gallery images, Try On options, and technical specifications.
+            Fill in product details, pricing, gallery images, Try On options, highlights, and available sizes.
           </p>
         </div>
 
         {/* Form Container */}
         <form onSubmit={handleSubmit} className="space-y-6">
+
+          {/* Section 0: Meesho Link Auto-Fetch Option */}
+          <div className="bg-gradient-to-r from-emerald-50/70 via-white to-lime-50/70 border border-emerald-200 rounded-2xl p-6 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
+              <div className="flex items-center gap-2 text-emerald-800">
+                <Link2 className="w-5 h-5 stroke-[2.5]" />
+                <h2 className="text-sm font-black tracking-tight">Auto-Fetch Product from Meesho</h2>
+              </div>
+              <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">
+                Link Automation
+              </span>
+            </div>
+
+            {/* Checkbox: Add Product Using Link */}
+            <label className="flex items-center gap-3 cursor-pointer select-none p-3.5 bg-white border border-emerald-200 rounded-xl hover:bg-emerald-50/50 transition-all">
+              <input
+                type="checkbox"
+                checked={useLinkUpload}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setUseLinkUpload(checked);
+                  if (!checked) {
+                    setMeeshoUrl('');
+                    setFetchedImagesReference([]);
+                    setLinkFetchSuccess(false);
+                  }
+                }}
+                className="w-4 h-4 accent-emerald-600 rounded cursor-pointer"
+              />
+              <div>
+                <span className="text-xs font-black text-gray-900">Add Product Using Link</span>
+                <p className="text-[11px] text-gray-500 font-medium">
+                  Enable to enter a Meesho product link and automatically fetch available product details.
+                </p>
+              </div>
+            </label>
+
+            {/* Input Field & Fetch Button - Visible ONLY when Checkbox is ON */}
+            {useLinkUpload && (
+              <div className="space-y-3 pt-1">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="url"
+                      value={meeshoUrl}
+                      onChange={(e) => setMeeshoUrl(e.target.value)}
+                      placeholder="Paste Meesho product link (e.g. https://www.meesho.com/s/p/... or https://meesho.com/p/...)"
+                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-emerald-300 rounded-xl text-xs text-gray-900 focus:outline-none focus:border-emerald-500 font-medium shadow-2xs placeholder:text-gray-400"
+                    />
+                    <Link2 className="w-4 h-4 text-emerald-600 absolute left-3 top-3" />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleFetchMeeshoDetails}
+                    disabled={isFetchingLink || !meeshoUrl.trim()}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer whitespace-nowrap"
+                  >
+                    {isFetchingLink ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Fetching Details...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Fetch Product Details</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {linkFetchSuccess && (
+                  <div className="p-3 bg-emerald-100/90 border border-emerald-300 rounded-xl text-emerald-950 text-xs font-bold flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                    <span>Product details fetched & pre-filled below! You can edit any details before saving.</span>
+                  </div>
+                )}
+
+                {/* Fetched Meesho Images Reference (User manually uploads catalog images below) */}
+                {fetchedImagesReference.length > 0 && (
+                  <div className="p-4 bg-white border border-emerald-200 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-black text-gray-800">
+                        Fetched Meesho Images Reference ({fetchedImagesReference.length}):
+                      </div>
+                      <span className="text-[10px] text-amber-700 font-extrabold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                        Select & Upload Images Manually Below
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 font-medium">
+                      Note: These images are for reference only and are NOT automatically uploaded. Select and upload your product catalog images manually in Section 3.
+                    </p>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {fetchedImagesReference.map((imgUrl, i) => (
+                        <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 bg-gray-50 group">
+                          <img src={imgUrl} alt={`Meesho Ref ${i + 1}`} className="w-full h-full object-cover" />
+                          <a
+                            href={imgUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="View image"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Section 1: Basic Information */}
           <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-2xs space-y-4">
@@ -583,51 +865,203 @@ export const ProductAdd: React.FC = () => {
             </div>
           </div>
 
-          {/* Section 5: Technical Specifications */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#488710] flex items-center gap-2">
-                <Sparkles className="w-4 h-4" />
-                <span>5. Technical Specifications</span>
-              </h2>
+          {/* Section 5: Size-Wise Pricing, Product Highlights & Supplier Compliance */}
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-2xs space-y-6">
+            <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#488710] flex items-center gap-2 border-b border-gray-100 pb-3">
+              <Sparkles className="w-4 h-4" />
+              <span>5B. Size-Wise Pricing, Product Highlights & Compliance Info</span>
+            </h2>
 
-              <button
-                type="button"
-                onClick={handleAddSpecRow}
-                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Attribute</span>
-              </button>
-            </div>
-
-            <div className="space-y-2 pt-1">
-              {specs.map((spec, idx) => (
-                <div key={idx} className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    value={spec.key}
-                    onChange={(e) => handleSpecChange(idx, 'key', e.target.value)}
-                    placeholder="Attribute (e.g. Material)"
-                    className="flex-1 px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:border-[#609f00] focus:bg-white font-medium"
-                  />
-                  <input
-                    type="text"
-                    value={spec.value}
-                    onChange={(e) => handleSpecChange(idx, 'value', e.target.value)}
-                    placeholder="Value (e.g. Cotton)"
-                    className="flex-1 px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:border-[#609f00] focus:bg-white font-medium"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveSpecRow(idx)}
-                    className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-200 text-xs transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+            {/* Select Size & Size-Wise Pricing */}
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-gray-800">
+                    Select Size &amp; Size-Wise Pricing
+                  </label>
+                  <span className="text-[11px] font-semibold text-emerald-700">
+                    Select sizes for this product. Check "Add Price" to specify custom prices per size.
+                  </span>
                 </div>
-              ))}
+                <label className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors self-start sm:self-auto">
+                  <input
+                    type="checkbox"
+                    checked={isAddPriceEnabled}
+                    onChange={(e) => setIsAddPriceEnabled(e.target.checked)}
+                    className="w-4 h-4 text-[#609f00] rounded focus:ring-[#609f00] cursor-pointer"
+                  />
+                  <span className="text-xs font-extrabold text-gray-900 select-none">Add Price</span>
+                </label>
+              </div>
+
+              {/* Quick Select Standard Sizes */}
+              <div className="flex flex-wrap items-center gap-1.5 pb-1">
+                <span className="text-[11px] font-bold text-gray-500 mr-1">Quick Select Size:</span>
+                {['Free Size', 'S', 'M', 'L', 'XL', 'XXL', '28', '30', '32', 'IND-6', 'IND-7', 'IND-8'].map((sz) => {
+                  const isAdded = sizeVariants.some((sv) => sv.size.toLowerCase() === sz.toLowerCase());
+                  return (
+                    <button
+                      key={sz}
+                      type="button"
+                      onClick={() => handleToggleSize(sz)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border transition-all cursor-pointer ${
+                        isAdded
+                          ? 'bg-[#609f00] text-white border-[#528900] shadow-2xs'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                      }`}
+                    >
+                      {sz} {isAdded ? '✓' : '+'}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Size Variants Grid */}
+              {sizeVariants.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                  {sizeVariants.map((sv) => (
+                    <div
+                      key={sv.size}
+                      className={`p-3 rounded-xl border transition-all space-y-1.5 ${
+                        sv.isAvailable !== false
+                          ? 'bg-white border-gray-200 shadow-2xs'
+                          : 'bg-gray-100 border-gray-200 opacity-60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-gray-900">{sv.size}</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleVariantAvailable(sv.size)}
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded cursor-pointer ${
+                              sv.isAvailable !== false
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {sv.isAvailable !== false ? 'In Stock' : 'Out of Stock'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSizeVariants((prev) => prev.filter((item) => item.size.toLowerCase() !== sv.size.toLowerCase()));
+                              setAvailableSizes((prev) => prev.filter((s) => s.toLowerCase() !== sv.size.toLowerCase()));
+                            }}
+                            className="text-gray-400 hover:text-rose-500 p-0.5"
+                            title="Remove size"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {isAddPriceEnabled && (
+                        <div className="flex items-center gap-1 pt-1">
+                          <span className="text-xs font-bold text-gray-500">₹</span>
+                          <input
+                            type="number"
+                            value={sv.price}
+                            onChange={(e) => handleUpdateVariantPrice(sv.size, Number(e.target.value))}
+                            placeholder="Price"
+                            className="w-full px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs font-black text-gray-900 focus:outline-none focus:border-[#609f00]"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 bg-gray-50 border border-dashed border-gray-300 rounded-2xl text-center text-xs text-gray-500">
+                  No sizes added yet. Click a quick select size above, fetch from Meesho link, or add a custom size variant below.
+                </div>
+              )}
+
+              {/* Add Custom Size Variant */}
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                <input
+                  type="text"
+                  value={customVariantSize}
+                  onChange={(e) => setCustomVariantSize(e.target.value)}
+                  placeholder="Custom Size (e.g. 34, XXXL)"
+                  className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 font-medium focus:outline-none focus:border-[#609f00] min-w-[140px]"
+                />
+                {isAddPriceEnabled && (
+                  <input
+                    type="number"
+                    value={customVariantPrice}
+                    onChange={(e) => setCustomVariantPrice(e.target.value)}
+                    placeholder="Price (₹)"
+                    className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 font-medium focus:outline-none focus:border-[#609f00] w-24"
+                  />
+                )}
+                <button
+                  type="button"
+                  onClick={handleAddCustomVariant}
+                  className="px-4 py-2 bg-[#609f00] hover:bg-[#528900] text-white rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  + Add Size Variant
+                </button>
+              </div>
             </div>
+
+            {/* Product Highlights */}
+            <div className="space-y-2 pt-3 border-t border-gray-100">
+              <label className="block text-xs font-bold uppercase text-gray-800">
+                Product Highlights
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newHighlight}
+                  onChange={(e) => setNewHighlight(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddHighlight(); } }}
+                  placeholder="Add highlight (e.g. Color: Black or Fabric: Cotton)"
+                  className="flex-1 px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 font-medium focus:outline-none focus:border-[#609f00]"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddHighlight}
+                  className="px-4 py-2 bg-[#609f00] hover:bg-[#528900] text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Highlight</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                {highlights.map((hl, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800">
+                    <span className="flex items-center gap-2 font-semibold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#609f00]" />
+                      {hl}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveHighlight(idx)}
+                      className="text-gray-400 hover:text-rose-500 transition-colors p-1 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* More Information */}
+            <div className="space-y-1.5 pt-3 border-t border-gray-100">
+              <label className="block text-xs font-bold uppercase text-gray-800">
+                More Information
+              </label>
+              <textarea
+                rows={3}
+                value={moreInformation.manufacturer || ''}
+                onChange={(e) => setMoreInformation((prev) => ({ ...prev, manufacturer: e.target.value }))}
+                placeholder="e.g. AHMAD KHAN 18/1 Sarojini Naidu Park Shastri Nagar East Delhi Gali No.1 Near By Kali Mata Mandir 110031"
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 font-medium focus:outline-none focus:border-[#609f00] leading-relaxed"
+              />
+            </div>
+
           </div>
 
           {/* Section 6: Homepage Placement */}

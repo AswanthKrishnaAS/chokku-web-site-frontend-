@@ -11,21 +11,21 @@ export const Footer: React.FC = () => {
     <footer className="bg-[#0b192c] text-white border-t border-[#1e293b] pt-10 pb-8 px-4 sm:px-6 lg:px-8 text-center">
       <div className="max-w-7xl mx-auto flex flex-col items-center justify-center space-y-5">
         
-        {/* Chokku Store Logo (With White Card Badge for crisp visibility on Dark Blue) */}
+        {/* Chokku Store Logo or Brand Title */}
         <Link to="/" className="inline-block transition-transform hover:scale-105">
-          <div className="bg-white/95 px-4 py-2 rounded-2xl shadow-md border border-slate-700/50 flex items-center justify-center">
-            <img
-              src={navbarLogo || chokkuLogo}
-              alt="Chokku Store Logo"
-              className="h-10 sm:h-12 w-auto object-contain max-w-[180px]"
-              onError={(e) => {
-                const target = e.currentTarget;
-                if (target.src !== chokkuLogo) {
-                  target.src = chokkuLogo;
-                }
-              }}
-            />
-          </div>
+          {navbarLogo ? (
+            <div className="bg-white/95 px-5 py-2.5 rounded-2xl shadow-md border border-slate-700/50 flex items-center justify-center">
+              <img
+                src={navbarLogo}
+                alt="Chokku Store Logo"
+                className="h-14 sm:h-18 max-h-[75px] w-auto object-contain max-w-[240px]"
+              />
+            </div>
+          ) : (
+            <span className="text-2xl sm:text-3xl font-black text-[#488710] tracking-tight">
+              Chokku Store
+            </span>
+          )}
         </Link>
 
         {/* Main Navigation Links */}

@@ -374,7 +374,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   galleryImages: [],
                   description: '',
                   stock: 10,
-                  specifications: {},
                 },
                 quantity: it.quantity || 1,
                 title: itemTitle,

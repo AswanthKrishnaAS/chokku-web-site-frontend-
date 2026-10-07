@@ -1,7 +1,7 @@
 import { Landmark, RenderDimensions, normalizedToPixel, LANDMARK_INDICES, POSE_LANDMARK_INDICES } from '../utils/landmarkUtils';
 import { HeadPose } from './headPose';
 
-export type TryOnType = 'Earrings' | 'Necklace' | 'Dress' | 'Bangle' | 'Shoes' | 'Glasses' | 'Other';
+export type TryOnType = 'Earrings' | 'Necklace' | 'Dress' | 'Bangle' | 'Ring' | 'Bracelet' | 'Hand chain' | 'Shoes' | 'Glasses' | 'Other';
 export type FrameMode = 'half' | 'full' | 'auto';
 
 export interface AccessoryAnchorItem {
