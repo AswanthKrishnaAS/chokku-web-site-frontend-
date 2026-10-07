@@ -24,7 +24,6 @@ import {
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { MyGifts } from '../components/MyGifts';
-import chokkuLogo from '../assets/img/chokku.png';
 import playbgm from '../assets/img/playbgm.png';
 import playmobile from '../assets/img/playmobile.png';
 import notificationSound from '../assets/notification.mp3';

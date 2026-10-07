@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import chokkuLogo from '../../assets/img/chokku.png';
+import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 
 export const AdminLogin: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -11,6 +11,7 @@ export const AdminLogin: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState('');
 
   const { adminLogin } = useAuth();
+  const { navbarLogo } = useWebsiteSettings();
   const navigate = useNavigate();
 
   const handleAdminLogin = async (e: React.FormEvent) => {
@@ -48,7 +49,13 @@ export const AdminLogin: React.FC = () => {
           </div>
 
           <div className="flex items-center justify-center gap-2 pt-1">
-            <img src={chokkuLogo} alt="Chokku Store Logo" className="h-9 w-auto object-contain brightness-110" />
+            {navbarLogo ? (
+              <img src={navbarLogo} alt="Store Logo" className="h-9 w-auto object-contain brightness-110" />
+            ) : (
+              <span className="text-xl font-black text-emerald-400 tracking-tight">
+                Chokku Store
+              </span>
+            )}
             <span className="bg-emerald-500/10 text-emerald-400 text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-emerald-500/20">
               Admin Portal
             </span>

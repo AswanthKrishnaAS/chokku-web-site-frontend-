@@ -8,7 +8,7 @@ export interface EarAnchor {
   scale: number;
   perspectiveScaleX: number;
   visible: boolean;
-  shadow: {
+  shadow?: {
     offsetX: number;
     offsetY: number;
     blur: number;

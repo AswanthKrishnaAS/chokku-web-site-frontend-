@@ -52,8 +52,6 @@ import { useGameSettings, GiftBoxRewardConfig } from '../../context/GameSettings
 import { PRODUCTS } from '../../data/products';
 import { CATEGORIES } from '../../data/categories';
 import { Product, Order } from '../../types';
-import chokkuLogo from '../../assets/img/chokku.png';
-import heroImg from '../../assets/img/img.png';
 import loginImg from '../../assets/img/login.png';
 import notificationAudioSound from '../../assets/notification.mp3';
 import { socket } from '../../socket';
@@ -70,7 +68,7 @@ interface AdminNotification {
 
 export const AdminDashboard: React.FC = () => {
   const { adminUser, adminLogout, orders, updateOrderStatus } = useAuth();
-  const { navbarLogo, uploadNavbarLogo, setNavbarLogo, homeSliders, saveHomeSliders, uploadSliderImage } = useWebsiteSettings();
+  const { navbarLogo, uploadNavbarLogo, setNavbarLogo, homeSliders, saveHomeSliders, uploadSliderImage, createSlider, updateSlider, deleteSlider, toggleSliderStatus } = useWebsiteSettings();
   const {
     categories: storeCategories,
     sectionMetaTag,
@@ -628,29 +626,8 @@ export const AdminDashboard: React.FC = () => {
   const [selectedProductRoute, setSelectedProductRoute] = useState('');
   const [selectedGameRoute, setSelectedGameRoute] = useState('/catch-the-gift');
 
-  // Default fallback slides if database is empty
-  const activeSlides: HomeSlideItem[] = homeSliders.length > 0 ? homeSliders : [
-    {
-      id: 'slide-1',
-      image: heroImg,
-      metaTag: 'EXCLUSIVE DEAL',
-      heading: 'SHOP. PLAY. EARN REWARDS!',
-      subheading: 'Shop your favorites, play fun games and earn exciting rewards every day!',
-      buttonText: 'Shop Now',
-      buttonLink: '/shop',
-      status: 'Active',
-    },
-    {
-      id: 'slide-2',
-      image: heroImg,
-      metaTag: 'SPECIAL SUMMER OFFER',
-      heading: 'FRESH & ORGANIC GROCERIES',
-      subheading: 'Get up to 30% OFF on all fresh fruits, vegetables, and daily essentials!',
-      buttonText: 'Explore Offers',
-      buttonLink: '/shop',
-      status: 'Active',
-    },
-  ];
+  // Active homepage slider slides from MongoDB collection
+  const activeSlides: HomeSlideItem[] = homeSliders;
 
   const handleDesktopSlideFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -704,7 +681,7 @@ export const AdminDashboard: React.FC = () => {
     const link = slide.buttonLink || '/shop';
     setSlideButtonLink(link);
     setSlideStatus(slide.status || 'Active');
-    setDesktopSlidePreview(slide.desktopImage || slide.image || heroImg);
+    setDesktopSlidePreview(slide.desktopImage || slide.image || '');
     setMobileSlidePreview(slide.mobileImage || null);
     setDesktopSlideFile(null);
     setMobileSlideFile(null);
@@ -725,14 +702,11 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleToggleSlideStatus = async (slideId: string) => {
-    const updatedSlides = activeSlides.map((s) =>
-      s.id === slideId
-        ? { ...s, status: (s.status === 'Inactive' ? 'Active' : 'Inactive') as 'Active' | 'Inactive' }
-        : s
-    );
-    const saveRes = await saveHomeSliders(updatedSlides);
-    if (saveRes.success) {
-      addToast('Status Updated', 'Banner status has been toggled.', 'info');
+    const res = await toggleSliderStatus(slideId);
+    if (res.success) {
+      addToast('Status Updated', 'Banner status has been toggled in homepageSlider collection.', 'info');
+    } else {
+      addToast('Update Failed', res.message, 'error');
     }
   };
 
@@ -765,7 +739,7 @@ export const AdminDashboard: React.FC = () => {
       }
     }
 
-    const mainImageUrl = finalDesktopUrl || finalMobileUrl || heroImg;
+    const mainImageUrl = finalDesktopUrl || finalMobileUrl || '';
 
     let finalButtonLink = slideButtonLink.trim() || '/shop';
     if (targetType === 'category') {
@@ -776,59 +750,45 @@ export const AdminDashboard: React.FC = () => {
       finalButtonLink = selectedGameRoute || '/catch-the-gift';
     }
 
-    let updatedSlides: HomeSlideItem[] = [];
-    if (slideEditId) {
-      // Update existing slide
-      updatedSlides = activeSlides.map((s) =>
-        s.id === slideEditId
-          ? {
-              ...s,
-              image: mainImageUrl,
-              desktopImage: finalDesktopUrl,
-              mobileImage: finalMobileUrl,
-              metaTag: slideMetaTag.trim() || 'SPECIAL OFFER',
-              heading: slideHeading.trim() || 'Homepage Banner',
-              subheading: slideSubheading.trim() || 'Homepage Hero Banner',
-              buttonText: slideButtonText.trim() || 'Explore',
-              buttonLink: finalButtonLink,
-              status: slideStatus,
-            }
-          : s
-      );
+    const payload = {
+      image: mainImageUrl,
+      desktopImage: finalDesktopUrl,
+      mobileImage: finalMobileUrl,
+      metaTag: slideMetaTag.trim() || 'SPECIAL OFFER',
+      heading: slideHeading.trim() || 'Homepage Banner',
+      metaTitle: slideHeading.trim() || 'Homepage Banner',
+      subheading: slideSubheading.trim() || 'Homepage Hero Banner',
+      metaDescription: slideSubheading.trim() || 'Homepage Hero Banner',
+      buttonText: slideButtonText.trim() || 'Explore',
+      buttonLink: finalButtonLink,
+      linkUrl: finalButtonLink,
+      status: slideStatus,
+    };
+
+    let saveRes;
+    if (slideEditId && slideEditId.length === 24 && !slideEditId.startsWith('slide-')) {
+      saveRes = await updateSlider(slideEditId, payload);
     } else {
-      // Create new slide
-      const newSlide: HomeSlideItem = {
-        id: 'slide-' + Date.now(),
-        image: mainImageUrl,
-        desktopImage: finalDesktopUrl,
-        mobileImage: finalMobileUrl,
-        metaTag: slideMetaTag.trim() || 'SPECIAL OFFER',
-        heading: slideHeading.trim() || 'Homepage Banner',
-        subheading: slideSubheading.trim() || 'Homepage Hero Banner',
-        buttonText: slideButtonText.trim() || 'Explore',
-        buttonLink: finalButtonLink,
-        status: slideStatus,
-      };
-      updatedSlides = [newSlide, ...activeSlides];
+      saveRes = await createSlider(payload);
     }
 
-    const saveRes = await saveHomeSliders(updatedSlides);
     setIsSavingSlider(false);
 
     if (saveRes.success) {
-      addToast('Homepage Banner Saved!', 'Banner slide has been saved successfully.', 'success');
+      addToast('Homepage Banner Saved!', 'Banner slide saved to homepageSlider MongoDB collection.', 'success');
       setSliderViewMode('list');
     } else {
-      addToast('Save Failed', saveRes.message || 'Error saving banner to database', 'error');
+      addToast('Save Failed', saveRes.message || 'Error saving banner to homepageSlider collection', 'error');
     }
   };
 
   const handleDeleteSlide = async (slideId: string) => {
     if (!confirm('Are you sure you want to delete this homepage slider banner?')) return;
-    const updatedSlides = activeSlides.filter((s) => s.id !== slideId);
-    const saveRes = await saveHomeSliders(updatedSlides);
-    if (saveRes.success) {
-      addToast('Slide Removed', 'Banner slide has been deleted.', 'info');
+    const res = await deleteSlider(slideId);
+    if (res.success) {
+      addToast('Slide Removed', 'Banner slide deleted from homepageSlider collection.', 'info');
+    } else {
+      addToast('Delete Failed', res.message, 'error');
     }
   };
 
@@ -1027,14 +987,6 @@ export const AdminDashboard: React.FC = () => {
       }
     }
 
-    // Build specs object
-    const specMap: Record<string, string> = {};
-    prodSpecs.forEach((s) => {
-      if (s.key.trim()) {
-        specMap[s.key.trim()] = s.value.trim();
-      }
-    });
-
     const categoryObj = storeCategories.find((c) => c.slug === prodCategory);
     const categoryName = categoryObj ? categoryObj.name : 'General';
 
@@ -1048,7 +1000,6 @@ export const AdminDashboard: React.FC = () => {
       discountTag: prodDiscountTag.trim(),
       description: prodDescription.trim(),
       stock: Number(prodStock) || 0,
-      specifications: specMap,
       image: finalGalleryImages[0] || '',
       galleryImages: finalGalleryImages,
       isFeatured: prodIsFeatured,
@@ -1103,7 +1054,14 @@ export const AdminDashboard: React.FC = () => {
             </button>
 
             <div className="flex items-center gap-2.5">
-              <img src={chokkuLogo} alt="Chokku Store Logo" className="h-10 w-auto object-contain" />
+              {navbarLogo ? (
+                <img src={navbarLogo} alt="Store Logo" className="h-14 sm:h-16 max-h-[64px] w-auto object-contain" />
+              ) : (
+                <span className="text-xl font-black text-[#488710] tracking-tight flex items-center gap-1.5">
+                  <Sparkles className="w-6 h-6 text-[#488710]" />
+                  <span>Chokku Store</span>
+                </span>
+              )}
               <div className="h-6 w-px bg-gray-200 hidden sm:block" />
               <span className="bg-[#eaf8dd] text-[#488710] text-xs font-black px-2.5 py-0.5 rounded-full border border-[#d2ea9d] uppercase tracking-wider hidden sm:inline-block">
                 Admin Panel
@@ -1999,9 +1957,6 @@ export const AdminDashboard: React.FC = () => {
                                 src={cat.image}
                                 alt={cat.name}
                                 className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  (e.currentTarget as HTMLImageElement).src = heroImg;
-                                }}
                               />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-lg">🏷️</div>
@@ -2244,17 +2199,21 @@ export const AdminDashboard: React.FC = () => {
                   <p className="text-xs font-bold text-gray-700">Current Navbar Preview:</p>
                   <div className="bg-white border border-gray-100 p-3 rounded-lg flex items-center justify-between shadow-2xs">
                     <div className="flex items-center gap-3">
-                      <img
-                        src={navbarLogo || chokkuLogo}
-                        alt="Current Navbar Logo"
-                        className="h-12 max-w-[200px] object-contain"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = chokkuLogo;
-                        }}
-                      />
+                      {navbarLogo ? (
+                        <img
+                          src={navbarLogo}
+                          alt="Current Navbar Logo"
+                          className="h-12 max-w-[200px] object-contain"
+                        />
+                      ) : (
+                        <span className="text-lg font-black text-[#488710] tracking-tight flex items-center gap-1.5">
+                          <Sparkles className="w-5 h-5 text-[#488710]" />
+                          <span>Chokku Store</span>
+                        </span>
+                      )}
                     </div>
                     <span className="text-[11px] font-semibold text-gray-400">
-                      {navbarLogo ? 'Custom Uploaded Logo' : 'Default Asset Logo'}
+                      {navbarLogo ? 'Custom Uploaded Logo' : 'Default Brand Text'}
                     </span>
                   </div>
                 </div>
@@ -2422,12 +2381,9 @@ export const AdminDashboard: React.FC = () => {
                                   <div className="space-y-1">
                                     <div className="w-24 h-14 rounded-xl overflow-hidden border border-gray-200 shadow-2xs relative bg-gray-100">
                                       <img
-                                        src={slide.desktopImage || slide.image || heroImg}
+                                        src={slide.desktopImage || slide.image || ''}
                                         alt={slide.heading}
                                         className={`w-full h-full object-cover ${isInactive ? 'grayscale opacity-60' : ''}`}
-                                        onError={(e) => {
-                                          (e.currentTarget as HTMLImageElement).src = heroImg;
-                                        }}
                                       />
                                     </div>
                                     <span className="inline-block text-[9px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">🖥️ Desktop</span>

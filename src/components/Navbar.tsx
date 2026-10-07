@@ -126,17 +126,18 @@ export const Navbar: React.FC = () => {
         <div className="flex items-center justify-between gap-2">
           {/* Logo */}
           <Link to="/" className="shrink-0 flex items-center py-0.5">
-            <img
-              src={navbarLogo || chokkuLogo}
-              alt="chokku store logo"
-              className="h-24 xs:h-18 sm:h-20 w-auto object-contain max-w-[160px] xs:max-w-[210px] sm:max-w-[280px] transition-all"
-              onError={(e) => {
-                const target = e.currentTarget;
-                if (target.src !== chokkuLogo) {
-                  target.src = chokkuLogo;
-                }
-              }}
-            />
+            {navbarLogo ? (
+              <img
+                src={navbarLogo}
+                alt="Store logo"
+                className="h-55 xs:h-16 sm:h-20 max-h-[100px] sm:max-h-[80px] w-auto object-contain transition-all"
+              />
+            ) : (
+              <span className="text-xl xs:text-2xl font-black text-[#488710] tracking-tight flex items-center gap-1.5">
+                <Sparkles className="w-6 h-6 text-[#488710] shrink-0" />
+                <span>Chokku Store</span>
+              </span>
+            )}
           </Link>
 
           {/* Search Bar Input */}
@@ -291,19 +292,20 @@ export const Navbar: React.FC = () => {
 
       {/* ===== DESKTOP HEADER (hidden lg:flex) ===== */}
       <div className="hidden lg:flex w-full px-4 sm:px-8 lg:px-12 py-3 items-center justify-between gap-4 sm:gap-6 min-h-[88px] sm:min-h-[100px]">
-        {/* Left: Prominent & Extra Large Logo */}
+        {/* Left: Prominent Logo or Brand Name */}
         <Link to="/" className="flex items-center gap-2 shrink-0 group py-1" title="Chokku Store Home">
-          <img
-            src={navbarLogo || chokkuLogo}
-            alt="chokku store logo"
-            className="h-14 sm:h-20 md:h-24 lg:h-26 max-w-[320px] sm:max-w-[460px] w-auto object-contain transition-all duration-300 group-hover:scale-105"
-            onError={(e) => {
-              const target = e.currentTarget;
-              if (target.src !== chokkuLogo) {
-                target.src = chokkuLogo;
-              }
-            }}
-          />
+          {navbarLogo ? (
+            <img
+              src={navbarLogo}
+              alt="Store logo"
+              className="h-16 sm:h-22 md:h-26 lg:h-30 max-h-[95px] max-w-[360px] sm:max-w-[500px] w-auto object-contain transition-all duration-300 group-hover:scale-105"
+            />
+          ) : (
+            <span className="text-2xl sm:text-3xl font-black text-[#488710] tracking-tight flex items-center gap-2 group-hover:scale-105 transition-transform">
+              <Sparkles className="w-8 h-8 text-[#488710] shrink-0" />
+              <span>Chokku Store</span>
+            </span>
+          )}
         </Link>
 
         {/* Center Navigation Links */}

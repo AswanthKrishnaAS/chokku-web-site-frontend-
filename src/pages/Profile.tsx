@@ -28,7 +28,6 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useWishlist } from '../context/WishlistContext';
 import { Button } from '../components/Button';
-import chokkuLogo from '../assets/img/chokku.png';
 
 export const Profile: React.FC = () => {
   const { user, isAuthenticated, customerPoints, fetchCustomerPoints, updateProfile, logout, orders } = useAuth();

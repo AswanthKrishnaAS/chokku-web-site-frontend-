@@ -22,13 +22,11 @@ import { useCategories } from '../context/CategoryContext';
 import { useProducts } from '../context/ProductContext';
 import { useServerStatus } from '../context/ServerStatusContext';
 import { TreasureCoin } from '../components/TreasureCoin';
-import heroImg from '../assets/img/img.png';
-import chokkuLogo from '../assets/img/chokku.png';
 import serverImg from '../assets/img/server.png';
 
 export const Home: React.FC = () => {
   const { isServerConnected, isChecking, checkServerConnection } = useServerStatus();
-  const { homeSliders } = useWebsiteSettings();
+  const { homeSliders, navbarLogo } = useWebsiteSettings();
   const { categories: dynamicCategories } = useCategories();
   const { products: storeProducts } = useProducts();
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -38,31 +36,11 @@ export const Home: React.FC = () => {
 
   const activeHomeSliders = homeSliders.filter((s) => s.status !== 'Inactive');
 
-  const slides = activeHomeSliders.length > 0
-    ? activeHomeSliders
-    : [
-        {
-          id: '1',
-          image: heroImg,
-          metaTag: 'SPECIAL OFFER',
-          heading: 'ZXCZXC',
-          subheading: 'sdcdscd',
-          buttonText: 'SHOP NOW',
-          buttonLink: '/shop',
-        },
-        {
-          id: '2',
-          image: heroImg,
-          metaTag: 'SPECIAL OFFER',
-          heading: 'ZXCZXC',
-          subheading: 'sdcdscd',
-          buttonText: 'SHOP NOW',
-          buttonLink: '/shop',
-        },
-      ];
+  const slides = activeHomeSliders;
 
   // Auto-play carousel timer
   useEffect(() => {
+    if (slides.length === 0) return;
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 5000);
@@ -71,46 +49,7 @@ export const Home: React.FC = () => {
 
   const activeCategories = dynamicCategories.filter((c) => (c as any).status !== 'Inactive');
 
-  const fallbackCategories = [
-    {
-      id: 'cat-sarees',
-      name: 'Sarees',
-      slug: 'sarees',
-      image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      id: 'cat-lehenga',
-      name: 'Lehenga',
-      slug: 'lehenga',
-      image: 'https://images.unsplash.com/photo-1583391733956-6c78276477e2?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      id: 'cat-kurtis',
-      name: 'Kurtis',
-      slug: 'kurtis',
-      image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      id: 'cat-jewellery',
-      name: 'Jewellery',
-      slug: 'jewellery',
-      image: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      id: 'cat-men',
-      name: 'Men Wear',
-      slug: 'men-wear',
-      image: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      id: 'cat-electronics',
-      name: 'Electronics',
-      slug: 'electronics',
-      image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=400&q=80',
-    },
-  ];
-
-  const allCategories = activeCategories.length > 0 ? activeCategories : fallbackCategories;
+  const allCategories = activeCategories;
   const displayedCategories = showAllCategories ? allCategories : allCategories.slice(0, 4);
 
   const featuredProducts = storeProducts.filter((p) => p.isFeatured);
@@ -132,11 +71,17 @@ export const Home: React.FC = () => {
           
           {/* Circular Logo Badge */}
           <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-white shadow-md border border-gray-100/80 p-3 flex items-center justify-center -mt-12 sm:-mt-14 mb-2 z-10 transition-transform hover:scale-105">
-            <img
-              src={chokkuLogo}
-              alt="Chokku Store Logo"
-              className="w-full h-full object-contain"
-            />
+            {navbarLogo ? (
+              <img
+                src={navbarLogo}
+                alt="Store Logo"
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <span className="text-[#488710] font-black text-center text-sm sm:text-base leading-tight">
+                Chokku Store
+              </span>
+            )}
           </div>
 
           {/* Server Busy Artwork */}
@@ -175,74 +120,76 @@ export const Home: React.FC = () => {
 
   return (
     <div className="space-y-6 sm:space-y-12 pb-16 bg-[#fbfdf9] w-full">
-      {/* 1. Hero Carousel Banner Container (Image 2 style rounded card wrapper) */}
-      <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6">
-        <div className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-xs border border-gray-100/90 bg-white group">
-          {/* Carousel Slide Container */}
-          <div className="relative w-full overflow-hidden">
-            <div
-              className="flex transition-transform duration-500 ease-out"
-              style={{ transform: `translateX(-${currentSlide * 100}%)` }}
-            >
-              {slides.map((slide, idx) => (
-                <div key={slide.id || idx} className="w-full shrink-0 relative flex items-center">
-                  <Link to={slide.buttonLink || '/shop'} className="w-full block cursor-pointer transition-opacity hover:opacity-95">
-                    <picture className="w-full">
-                      {(slide.desktopImage || slide.image) && (
-                        <source media="(min-width: 640px)" srcSet={slide.desktopImage || slide.image} />
-                      )}
-                      {(slide.mobileImage || slide.image) && (
-                        <source media="(max-width: 639px)" srcSet={slide.mobileImage || slide.image} />
-                      )}
-                      <img
-                        src={slide.desktopImage || slide.mobileImage || slide.image || heroImg}
-                        alt={slide.heading || 'Chokku Store Banner'}
-                        className="w-full h-auto sm:h-[400px] md:h-[500px] lg:h-[580px] object-contain sm:object-cover block rounded-2xl sm:rounded-3xl"
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          if (target.src !== window.location.origin + '/img.png') {
-                            target.src = '/img.png';
-                          }
-                        }}
-                      />
-                    </picture>
-                  </Link>
-                </div>
-              ))}
+      {/* 1. Hero Carousel Banner Container */}
+      {slides.length > 0 && (
+        <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6">
+          <div className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-xs border border-gray-100/90 bg-white group">
+            {/* Carousel Slide Container */}
+            <div className="relative w-full overflow-hidden">
+              <div
+                className="flex transition-transform duration-500 ease-out"
+                style={{ transform: `translateX(-${currentSlide * 100}%)` }}
+              >
+                {slides.map((slide, idx) => (
+                  <div key={slide.id || idx} className="w-full shrink-0 relative flex items-center">
+                    <Link to={slide.buttonLink || '/shop'} className="w-full block cursor-pointer transition-opacity hover:opacity-95">
+                      <picture className="w-full">
+                        {(slide.desktopImage || slide.image) && (
+                          <source media="(min-width: 640px)" srcSet={slide.desktopImage || slide.image} />
+                        )}
+                        {(slide.mobileImage || slide.image) && (
+                          <source media="(max-width: 639px)" srcSet={slide.mobileImage || slide.image} />
+                        )}
+                        <img
+                          src={slide.desktopImage || slide.mobileImage || slide.image || ''}
+                          alt={slide.heading || 'Banner'}
+                          className="w-full h-auto sm:h-[400px] md:h-[500px] lg:h-[580px] object-contain sm:object-cover block rounded-2xl sm:rounded-3xl"
+                        />
+                      </picture>
+                    </Link>
+                  </div>
+                ))}
+              </div>
             </div>
+
+            {/* Carousel Navigation Arrows */}
+            {slides.length > 1 && (
+              <>
+                <button
+                  onClick={() => setCurrentSlide((prev) => (prev === 0 ? slides.length - 1 : prev - 1))}
+                  className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/80 hover:bg-white text-gray-800 shadow-md flex items-center justify-center transition-all opacity-70 hover:opacity-100"
+                  aria-label="Previous Slide"
+                >
+                  <ChevronLeft className="w-5 h-5 text-gray-800" />
+                </button>
+                <button
+                  onClick={() => setCurrentSlide((prev) => (prev + 1) % slides.length)}
+                  className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/80 hover:bg-white text-gray-800 shadow-md flex items-center justify-center transition-all opacity-70 hover:opacity-100"
+                  aria-label="Next Slide"
+                >
+                  <ChevronRight className="w-5 h-5 text-gray-800" />
+                </button>
+              </>
+            )}
           </div>
 
-          {/* Carousel Navigation Arrows */}
-          <button
-            onClick={() => setCurrentSlide((prev) => (prev === 0 ? slides.length - 1 : prev - 1))}
-            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/80 hover:bg-white text-gray-800 shadow-md flex items-center justify-center transition-all opacity-70 hover:opacity-100"
-            aria-label="Previous Slide"
-          >
-            <ChevronLeft className="w-5 h-5 text-gray-800" />
-          </button>
-          <button
-            onClick={() => setCurrentSlide((prev) => (prev + 1) % slides.length)}
-            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/80 hover:bg-white text-gray-800 shadow-md flex items-center justify-center transition-all opacity-70 hover:opacity-100"
-            aria-label="Next Slide"
-          >
-            <ChevronRight className="w-5 h-5 text-gray-800" />
-          </button>
-        </div>
-
-        {/* Carousel Pagination Dots (Below Image 2 Hero Card) */}
-        <div className="flex items-center justify-center gap-2 pt-3 pb-1">
-          {slides.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => setCurrentSlide(idx)}
-              className={`transition-all duration-300 rounded-full ${
-                currentSlide === idx ? 'w-6 h-2 bg-[#488710]' : 'w-2 h-2 bg-gray-300 hover:bg-gray-400'
-              }`}
-              aria-label={`Go to slide ${idx + 1}`}
-            />
-          ))}
-        </div>
-      </section>
+          {/* Carousel Pagination Dots */}
+          {slides.length > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-3 pb-1">
+              {slides.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentSlide(idx)}
+                  className={`transition-all duration-300 rounded-full ${
+                    currentSlide === idx ? 'w-6 h-2 bg-[#488710]' : 'w-2 h-2 bg-gray-300 hover:bg-gray-400'
+                  }`}
+                  aria-label={`Go to slide ${idx + 1}`}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* 2. 4-Feature Trust Strip Container (Below hero banner in Image 2 design) */}
       <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
@@ -341,18 +288,17 @@ export const Home: React.FC = () => {
                 to={`/category/${cat.slug}`}
                 className="flex flex-col items-center group cursor-pointer"
               >
-                <img
-                  src={
-                    cat.image ||
-                    'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=400&q=80'
-                  }
-                  alt={cat.name}
-                  className="w-12 h-12 xs:w-14 xs:h-14 sm:w-18 sm:h-18 rounded-full object-cover ring-2 ring-[#488710] ring-offset-2 shadow-xs group-hover:scale-105 transition-transform"
-                  onError={(e) => {
-                    e.currentTarget.src =
-                      'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=400&q=80';
-                  }}
-                />
+                {cat.image ? (
+                  <img
+                    src={cat.image}
+                    alt={cat.name}
+                    className="w-12 h-12 xs:w-14 xs:h-14 sm:w-18 sm:h-18 rounded-full object-cover ring-2 ring-[#488710] ring-offset-2 shadow-xs group-hover:scale-105 transition-transform"
+                  />
+                ) : (
+                  <div className="w-12 h-12 xs:w-14 xs:h-14 sm:w-18 sm:h-18 rounded-full bg-emerald-50 text-[#488710] font-bold flex items-center justify-center ring-2 ring-[#488710] ring-offset-2 shadow-xs group-hover:scale-105 transition-transform text-base sm:text-xl uppercase">
+                    {cat.name.charAt(0)}
+                  </div>
+                )}
                 <span className="text-[10px] sm:text-xs font-bold text-gray-800 mt-2 truncate w-full text-center">
                   {cat.name}
                 </span>
@@ -415,11 +361,15 @@ export const Home: React.FC = () => {
           <div className="relative hidden xs:flex items-center justify-center shrink-0 w-28 sm:w-44 h-28 sm:h-44">
             <div className="absolute inset-0 bg-white/10 rounded-full blur-xl animate-pulse" />
             <div className="relative w-24 h-24 sm:w-36 sm:h-36 bg-gradient-to-br from-emerald-300 to-green-500 rounded-3xl border-2 border-white/40 shadow-xl flex flex-col items-center justify-center p-2 transform rotate-6">
-              <img
-                src={chokkuLogo}
-                alt="chokku logo"
-                className="h-10 sm:h-14 object-contain mb-1"
-              />
+              {navbarLogo ? (
+                <img
+                  src={navbarLogo}
+                  alt="Store logo"
+                  className="h-10 sm:h-14 object-contain mb-1"
+                />
+              ) : (
+                <Sparkles className="w-8 h-8 text-white mb-1" />
+              )}
               <span className="bg-amber-400 text-amber-950 text-[9px] sm:text-[11px] font-black px-2 py-0.5 rounded-full shadow-2xs">
                 OFF 30%
               </span>

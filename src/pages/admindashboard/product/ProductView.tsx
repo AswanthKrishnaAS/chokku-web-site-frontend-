@@ -149,7 +149,7 @@ export const ProductView: React.FC = () => {
                 <img
                   src={gallery[activeImageIndex] || gallery[0]}
                   alt={product.name}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain p-2"
                 />
               ) : (
                 <div className="text-center space-y-2 text-gray-400">
@@ -318,19 +318,117 @@ export const ProductView: React.FC = () => {
               </p>
             </div>
 
-            {/* Technical Specs */}
-            {product.specifications && Object.keys(product.specifications).length > 0 && (
+            {/* Select Size & Size-Wise Pricing */}
+            {((product.sizeVariants && product.sizeVariants.length > 0) || (product.sizes && product.sizes.length > 0)) && (
               <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-2xs space-y-3">
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-500">
-                  Technical Specifications
+                {(() => {
+                  const vars = product.sizeVariants && product.sizeVariants.length > 0
+                    ? product.sizeVariants
+                    : (product.sizes || []).map((sz) => ({ size: sz, price: product.price || 0, isAvailable: true }));
+
+                  const availableVarList = vars.filter((v) => v.isAvailable !== false);
+                  const firstValidPrice = vars.find((v) => v.price > 0)?.price || product.price || 271;
+                  const hasDifferentPrices = product.isAddPriceEnabled !== undefined
+                    ? product.isAddPriceEnabled === true
+                    : (vars.length > 1 && vars.some((v) => v.price > 0 && v.price !== firstValidPrice));
+                  const sizesFormatted = availableVarList.map((v) => v.size).join(' / ');
+
+                  return (
+                    <>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                        <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-700">
+                          Available Sizes &amp; Pricing
+                        </h3>
+                        {!hasDifferentPrices && sizesFormatted && (
+                          <span className="text-xs font-black text-[#488710]">
+                            {sizesFormatted} – ₹{firstValidPrice}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2.5">
+                        {vars.map((v) => (
+                          <div
+                            key={v.size}
+                            className={`px-3.5 py-2 rounded-xl border text-center ${
+                              v.isAvailable !== false
+                                ? 'bg-gray-50 border-gray-200 text-gray-900'
+                                : 'bg-gray-100 border-gray-200 text-gray-400 line-through opacity-60'
+                            }`}
+                          >
+                            <div className="text-xs font-black">{v.size}</div>
+                            {hasDifferentPrices && (
+                              <div className="text-[11px] font-bold text-[#488710]">₹{v.price || firstValidPrice}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Product Highlights (Screenshot 2) */}
+            {product.highlights && product.highlights.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-2xs space-y-3">
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-700">
+                  Product Highlights
                 </h3>
-                <div className="divide-y divide-gray-100 border border-gray-200 rounded-xl overflow-hidden text-xs">
-                  {Object.entries(product.specifications).map(([key, val], idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50/50">
-                      <span className="font-bold text-gray-600">{key}</span>
-                      <span className="font-semibold text-gray-900">{val}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {product.highlights.map((hl, idx) => (
+                    <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100 font-semibold text-gray-800">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>{hl}</span>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Additional Details (Screenshot 2) */}
+            {product.additionalDetails && (
+              <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-2xs space-y-2">
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-700">
+                  Additional Details
+                </h3>
+                <p className="text-xs text-gray-700 leading-relaxed font-medium whitespace-pre-line bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  {product.additionalDetails}
+                </p>
+              </div>
+            )}
+
+            {/* More Information (Screenshot 3) */}
+            {product.moreInformation && (product.moreInformation.manufacturer || product.moreInformation.packer) && (
+              <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-2xs space-y-3">
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-700">
+                  More Information (Manufacturer &amp; Compliance Details)
+                </h3>
+                <div className="space-y-2 text-xs text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  {product.moreInformation.manufacturer && (
+                    <div>
+                      <span className="font-bold block text-gray-900">Manufacturer Information:</span>
+                      <span>{product.moreInformation.manufacturer}</span>
+                    </div>
+                  )}
+                  {product.moreInformation.importer && (
+                    <div>
+                      <span className="font-bold block text-gray-900">Importer Information:</span>
+                      <span>{product.moreInformation.importer}</span>
+                    </div>
+                  )}
+                  {product.moreInformation.packer && (
+                    <div>
+                      <span className="font-bold block text-gray-900">Packer Information:</span>
+                      <span>{product.moreInformation.packer}</span>
+                    </div>
+                  )}
+                  {product.moreInformation.netWeight && (
+                    <div>
+                      <span className="font-bold text-gray-900">Net Weight(g): </span>
+                      <span>{product.moreInformation.netWeight}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
