@@ -24,6 +24,8 @@ import { useToast } from '../../../context/ToastContext';
 import { SizeVariant, MoreInformation } from '../../../types';
 import { AdminLayout } from '../Sidebar';
 
+import { getApiUrl, getLiveApiUrl, setLiveApiUrl } from '../../../utils/api';
+
 export const ProductAdd: React.FC = () => {
   const navigate = useNavigate();
   const { addProductOrUpdate, uploadProductImages, uploadTryOnImages, fetchMeeshoProductDetails } = useProducts();
@@ -36,6 +38,22 @@ export const ProductAdd: React.FC = () => {
   const [isFetchingLink, setIsFetchingLink] = useState(false);
   const [linkFetchSuccess, setLinkFetchSuccess] = useState(false);
   const [fetchedImagesReference, setFetchedImagesReference] = useState<string[]>([]);
+
+  // Live API Backend URL state
+  const [liveApiUrlInput, setLiveApiUrlInput] = useState(() => getLiveApiUrl() || getApiUrl());
+  const [showLiveApiConfig, setShowLiveApiConfig] = useState(false);
+
+  const handleSaveLiveApiUrl = () => {
+    if (liveApiUrlInput.trim()) {
+      setLiveApiUrl(liveApiUrlInput.trim());
+      addToast('Live API URL Saved', `Connected to backend API: ${getApiUrl()}`, 'success');
+      setShowLiveApiConfig(false);
+    } else {
+      setLiveApiUrl('');
+      addToast('Reset to Default', `Using default API endpoint: ${getApiUrl()}`, 'info');
+      setLiveApiUrlInput(getApiUrl());
+    }
+  };
 
   const [name, setName] = useState('');
   const [category, setCategory] = useState(categories[0]?.slug || 'general');
@@ -429,15 +447,53 @@ export const ProductAdd: React.FC = () => {
 
           {/* Section 0: Meesho Link Auto-Fetch Option */}
           <div className="bg-gradient-to-r from-emerald-50/70 via-white to-lime-50/70 border border-emerald-200 rounded-2xl p-6 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
+            <div className="flex items-center justify-between border-b border-emerald-100 pb-3 flex-wrap gap-2">
               <div className="flex items-center gap-2 text-emerald-800">
                 <Link2 className="w-5 h-5 stroke-[2.5]" />
                 <h2 className="text-sm font-black tracking-tight">Auto-Fetch Product from Meesho</h2>
               </div>
-              <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">
-                Link Automation
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowLiveApiConfig((prev) => !prev)}
+                  className="text-[11px] font-extrabold text-emerald-700 hover:text-emerald-900 bg-white px-3 py-1 rounded-full border border-emerald-300 transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  ⚡ Live API URL: <span className="font-mono text-[10px] text-gray-600 truncate max-w-[160px]">{getApiUrl()}</span>
+                </button>
+                <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">
+                  Link Automation
+                </span>
+              </div>
             </div>
+
+            {/* Live API URL Configuration Box */}
+            {showLiveApiConfig && (
+              <div className="p-4 bg-emerald-100/60 border border-emerald-300 rounded-xl space-y-2 text-xs">
+                <div className="font-black text-emerald-900 flex items-center justify-between">
+                  <span>🌐 Live Backend API URL Configuration</span>
+                  <span className="text-[10px] font-normal text-emerald-700">Set your live deployed Node.js backend URL</span>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="url"
+                    value={liveApiUrlInput}
+                    onChange={(e) => setLiveApiUrlInput(e.target.value)}
+                    placeholder="e.g. https://chokku-store-backend.onrender.com/api"
+                    className="flex-1 px-3 py-2 bg-white border border-emerald-300 rounded-lg text-xs font-mono focus:outline-none focus:border-emerald-600 text-gray-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveLiveApiUrl}
+                    className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold rounded-lg text-xs shadow-xs cursor-pointer"
+                  >
+                    Save & Connect API
+                  </button>
+                </div>
+                <p className="text-[11px] text-emerald-800 font-medium">
+                  Active Target API Endpoint: <code className="font-bold bg-white px-1.5 py-0.5 rounded border border-emerald-200 text-emerald-950">{getApiUrl()}</code>
+                </p>
+              </div>
+            )}
 
             {/* Checkbox: Add Product Using Link */}
             <label className="flex items-center gap-3 cursor-pointer select-none p-3.5 bg-white border border-emerald-200 rounded-xl hover:bg-emerald-50/50 transition-all">
