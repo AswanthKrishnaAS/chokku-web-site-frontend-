@@ -1,19 +1,38 @@
 // Centralized API configuration and safe fetch wrapper for production & local
 
 export const getApiUrl = (path: string = ''): string => {
-  let base = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').trim();
-  
-  // Remove trailing slashes
-  base = base.replace(/\/+$/, '');
-  
-  // Ensure base ends with /api if not present
-  if (!base.endsWith('/api') && !base.includes('/api/')) {
-    base = `${base}/api`;
+  if (path && (path.startsWith('http://') || path.startsWith('https://'))) {
+    return path;
   }
-  
-  if (!path) return base;
 
-  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  let base = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').trim();
+  // Strip trailing slashes
+  base = base.replace(/\/+$/, '');
+
+  // If path is empty, return normalized base ending in /api
+  if (!path) {
+    if (!base.endsWith('/api') && !base.includes('/api/')) {
+      return `${base}/api`;
+    }
+    return base;
+  }
+
+  let cleanPath = path.startsWith('/') ? path : `/${path}`;
+
+  // If base already ends with /api and cleanPath starts with /api/, remove /api from cleanPath
+  if (base.endsWith('/api')) {
+    if (cleanPath === '/api') {
+      cleanPath = '';
+    } else if (cleanPath.startsWith('/api/')) {
+      cleanPath = cleanPath.substring(4);
+    }
+  } else if (!base.includes('/api/')) {
+    // Base does not have /api, check if cleanPath already starts with /api
+    if (!cleanPath.startsWith('/api/')) {
+      base = `${base}/api`;
+    }
+  }
+
   return `${base}${cleanPath}`;
 };
 
