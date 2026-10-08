@@ -5,7 +5,21 @@ export const getApiUrl = (path: string = ''): string => {
     return path;
   }
 
-  let base = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').trim();
+  let base = '';
+  const envUrl = (import.meta.env.VITE_API_URL || '').trim();
+  const storedUrl = typeof localStorage !== 'undefined' ? (localStorage.getItem('chokku_live_api_url') || '').trim() : '';
+
+  if (envUrl) {
+    base = envUrl;
+  } else if (storedUrl) {
+    base = storedUrl;
+  } else if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    // Production live website fallback to origin /api
+    base = `${window.location.origin}/api`;
+  } else {
+    base = 'http://localhost:5000/api';
+  }
+
   // Strip trailing slashes
   base = base.replace(/\/+$/, '');
 
@@ -93,13 +107,18 @@ export const safeFetch = async <T = any>(
       }
     }
 
+    let customErrorMessage = `Server returned non-JSON response (status ${res.status}): ${text.substring(0, 100)}`;
+    if (res.status === 404 && text.includes('<!DOCTYPE html>')) {
+      customErrorMessage = `API endpoint not found (404). Please ensure the backend live service is deployed and VITE_API_URL is configured. Target: ${fullUrl}`;
+    }
+
     return {
       ok: res.ok,
       status: res.status,
       isJson: false,
       data: null,
       text,
-      error: res.ok ? undefined : `Server returned non-JSON response (status ${res.status}): ${text.substring(0, 100)}`,
+      error: res.ok ? undefined : customErrorMessage,
     };
   } catch (netErr: any) {
     return {
