@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { safeFetch } from '../utils/api';
 
 interface ConversionHistoryItem {
   _id?: string;
@@ -53,24 +54,20 @@ export const Points: React.FC = () => {
   const loadPointsData = async () => {
     setLoading(true);
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
       const token = localStorage.getItem('chokku_customer_token_v2') || localStorage.getItem('chokku_token') || '';
       const userId = customerUser?.id || (customerUser as any)?._id || '';
 
-      const res = await fetch(`${API_URL}/catch-game/my-points`, {
+      const res = await safeFetch('/catch-game/my-points', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'x-user-id': userId,
         },
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setConversions(data.conversions || []);
-          setWalletBalance(data.walletBalance || 0);
-          fetchCustomerPoints();
-        }
+      if (res.ok && res.isJson && res.data?.success) {
+        setConversions(res.data.conversions || []);
+        setWalletBalance(res.data.walletBalance || 0);
+        fetchCustomerPoints();
       }
     } catch (err) {
       console.warn('Error fetching points data:', err);
@@ -96,11 +93,10 @@ export const Points: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
       const token = localStorage.getItem('chokku_customer_token_v2') || localStorage.getItem('chokku_token') || '';
       const userId = customerUser?.id || (customerUser as any)?._id || '';
 
-      const res = await fetch(`${API_URL}/catch-game/convert-points`, {
+      const res = await safeFetch('/catch-game/convert-points', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -109,14 +105,13 @@ export const Points: React.FC = () => {
         },
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        addToast('🎉 Conversion Successful!', data.message || `Converted ${pointsToConvert.toLocaleString()} points to ₹${rupeesValue}`, 'success');
+      if (res.ok && res.isJson && res.data?.success) {
+        addToast('🎉 Conversion Successful!', res.data.message || `Converted ${pointsToConvert.toLocaleString()} points to ₹${rupeesValue}`, 'success');
         setShowConfirmModal(false);
         await loadPointsData();
         await fetchCustomerPoints();
       } else {
-        addToast('Conversion Failed', data.message || 'Unable to convert points right now', 'error');
+        addToast('Conversion Failed', res.data?.message || res.error || 'Unable to convert points right now', 'error');
       }
     } catch (err) {
       console.error('Points conversion error:', err);

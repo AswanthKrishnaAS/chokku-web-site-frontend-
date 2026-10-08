@@ -14,6 +14,7 @@ import { TryOnCanvas, TryOnCanvasRef } from './TryOn/TryOnCanvas';
 import { TryOnControls } from './TryOn/TryOnControls';
 import { FrameMode } from '../services/accessoryTransform';
 import { getTryOnEngine, TryOnEngineType } from '../services/tryOnEngineRouter';
+import { safeFetch } from '../utils/api';
 
 interface TryOnModalProps {
   isOpen: boolean;
@@ -360,7 +361,7 @@ export const TryOnModal: React.FC<TryOnModalProps> = ({
     setVtonError(null);
 
     try {
-      const response = await fetch('/api/try-on/clothing', {
+      const response = await safeFetch('/try-on/clothing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -369,12 +370,11 @@ export const TryOnModal: React.FC<TryOnModalProps> = ({
         }),
       });
 
-      const data = await response.json();
-      if (data.success && data.result) {
-        setVtonResultImage(data.result);
+      if (response.ok && response.data?.success && response.data?.result) {
+        setVtonResultImage(response.data.result);
       } else {
-        console.warn('VTON Fallback to AR Overlay:', data.message);
-        setVtonError(data.message || 'AI Clothing Try-On service unavailable');
+        console.warn('VTON Fallback to AR Overlay:', response.data?.message);
+        setVtonError(response.data?.message || 'AI Clothing Try-On service unavailable');
       }
     } catch (err: any) {
       console.error('Clothing VTON AI fetch error:', err);

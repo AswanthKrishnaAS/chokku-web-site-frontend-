@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Order, SavedAddress } from '../types';
 import { useToast } from './ToastContext';
 import { socket } from '../socket';
+import { safeFetch } from '../utils/api';
 
 interface RegisterData {
   name: string;
@@ -53,7 +54,6 @@ const CUSTOMER_USER_KEY = 'chokku_customer_user_v2';
 const CUSTOMER_TOKEN_KEY = 'chokku_customer_token_v2';
 const ADMIN_USER_KEY = 'chokku_admin_user_v2';
 const ADMIN_TOKEN_KEY = 'chokku_admin_token_v2';
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { addToast } = useToast();
@@ -108,21 +108,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (email) queryParams.append('email', email);
       if (phone) queryParams.append('phone', phone);
 
-      const res = await fetch(`${API_URL}/auth/addresses?${queryParams.toString()}`, {
+      const res = await safeFetch(`/auth/addresses?${queryParams.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'x-user-id': userId,
         },
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.addresses)) {
-          setSavedAddresses(data.addresses);
-          const userKey = getCustomerOrdersKey(customerUser).replace('orders', 'addresses');
-          localStorage.setItem(userKey, JSON.stringify(data.addresses));
-          return data.addresses;
-        }
+      if (res.ok && res.isJson && res.data?.success && Array.isArray(res.data?.addresses)) {
+        setSavedAddresses(res.data.addresses);
+        const userKey = getCustomerOrdersKey(customerUser).replace('orders', 'addresses');
+        localStorage.setItem(userKey, JSON.stringify(res.data.addresses));
+        return res.data.addresses;
       }
     } catch (err) {
       console.warn('Backend address fetch error (using local storage fallback):', err);
@@ -155,7 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const token = localStorage.getItem('chokku_customer_token_v2') || '';
       const userId = customerUser.id || (customerUser as any)._id || '';
 
-      const res = await fetch(`${API_URL}/auth/addresses`, {
+      const res = await safeFetch('/auth/addresses', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -170,16 +167,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }),
       });
 
-      const resData = await res.json();
-      if (res.ok && resData.success) {
-        setSavedAddresses(resData.addresses);
+      if (res.ok && res.isJson && res.data?.success) {
+        setSavedAddresses(res.data.addresses);
         const userKey = getCustomerOrdersKey(customerUser).replace('orders', 'addresses');
-        localStorage.setItem(userKey, JSON.stringify(resData.addresses));
-        addToast('Address Saved', resData.message || 'Address saved successfully.', 'success');
-        return { success: true, message: resData.message, addresses: resData.addresses };
+        localStorage.setItem(userKey, JSON.stringify(res.data.addresses));
+        addToast('Address Saved', res.data.message || 'Address saved successfully.', 'success');
+        return { success: true, message: res.data.message, addresses: res.data.addresses };
       } else {
-        addToast('Cannot Save Address', resData.message || 'Failed to save address.', 'error');
-        return { success: false, message: resData.message || 'Failed to save address.' };
+        const errMsg = res.data?.message || res.error || 'Failed to save address.';
+        addToast('Cannot Save Address', errMsg, 'error');
+        return { success: false, message: errMsg };
       }
     } catch (err) {
       console.error('Error adding saved address:', err);
@@ -222,7 +219,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const token = localStorage.getItem('chokku_customer_token_v2') || '';
       const userId = customerUser.id || (customerUser as any)._id || '';
 
-      const res = await fetch(`${API_URL}/auth/addresses/${addressId}`, {
+      const res = await safeFetch(`/auth/addresses/${addressId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -230,16 +227,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
       });
 
-      const resData = await res.json();
-      if (res.ok && resData.success) {
-        setSavedAddresses(resData.addresses);
+      if (res.ok && res.isJson && res.data?.success) {
+        setSavedAddresses(res.data.addresses);
         const userKey = getCustomerOrdersKey(customerUser).replace('orders', 'addresses');
-        localStorage.setItem(userKey, JSON.stringify(resData.addresses));
-        addToast('Address Deleted', resData.message || 'Saved address deleted.', 'info');
-        return { success: true, message: resData.message, addresses: resData.addresses };
+        localStorage.setItem(userKey, JSON.stringify(res.data.addresses));
+        addToast('Address Deleted', res.data.message || 'Saved address deleted.', 'info');
+        return { success: true, message: res.data.message, addresses: res.data.addresses };
       } else {
-        addToast('Delete Failed', resData.message || 'Failed to delete address.', 'error');
-        return { success: false, message: resData.message || 'Failed to delete address.' };
+        const errMsg = res.data?.message || res.error || 'Failed to delete address.';
+        addToast('Delete Failed', errMsg, 'error');
+        return { success: false, message: errMsg };
       }
     } catch (err) {
       console.error('Error deleting saved address:', err);
@@ -267,19 +264,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const token = localStorage.getItem('chokku_customer_token_v2') || localStorage.getItem('chokku_token') || '';
       const userId = customerUser.id || (customerUser as any)._id || '';
 
-      const res = await fetch(`${API_URL}/catch-game/my-points`, {
+      const res = await safeFetch('/catch-game/my-points', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'x-user-id': userId,
         },
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && typeof data.totalPoints === 'number') {
-          setCustomerPoints(data.totalPoints);
-          return data.totalPoints;
-        }
+      if (res.ok && res.isJson && res.data?.success && typeof res.data?.totalPoints === 'number') {
+        setCustomerPoints(res.data.totalPoints);
+        return res.data.totalPoints;
       }
     } catch (err) {
       console.warn('Failed fetching customer points from backend:', err);
@@ -335,88 +329,83 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (userId) queryParams.append('userId', userId);
       if (username) queryParams.append('username', username);
 
-      const res = await fetch(`${API_URL}/orders/my-orders?${queryParams.toString()}`, {
+      const res = await safeFetch(`/orders/my-orders?${queryParams.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'x-user-id': userId,
         },
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.orders)) {
-          const formatted: Order[] = data.orders.map((o: any) => ({
-            id: o.orderCustomId || o._id,
-            _id: o._id,
-            date: o.createdAt ? o.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
-            createdAt: o.createdAt,
-            customerInfo: o.customerInfo,
-            items: (o.items || []).map((it: any) => {
-              const itemTitle = it.title || it.product?.name || 'Product';
-              const itemImage = it.image || it.product?.image || '/placeholder.png';
-              const itemPrice = typeof it.price === 'number' ? it.price : (it.product?.price || 0);
+      if (res.ok && res.isJson && res.data?.success && Array.isArray(res.data?.orders)) {
+        const formatted: Order[] = res.data.orders.map((o: any) => ({
+          id: o.orderCustomId || o._id,
+          _id: o._id,
+          date: o.createdAt ? o.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+          createdAt: o.createdAt,
+          customerInfo: o.customerInfo,
+          items: (o.items || []).map((it: any) => {
+            const itemTitle = it.title || it.product?.name || 'Product';
+            const itemImage = it.image || it.product?.image || '/placeholder.png';
+            const itemPrice = typeof it.price === 'number' ? it.price : (it.product?.price || 0);
 
-              return {
-                ...it,
-                product: {
-                  id: it.id || it.product?.id || `prod-${Math.random()}`,
-                  name: itemTitle,
-                  image: itemImage,
-                  price: itemPrice,
-                  originalPrice: it.originalPrice || itemPrice,
-                  weight: it.weight || '',
-                  category: it.category || '',
-                  slug: '',
-                  categoryName: '',
-                  discountPercent: 0,
-                  rating: 5,
-                  reviewCount: 0,
-                  galleryImages: [],
-                  description: '',
-                  stock: 10,
-                },
-                quantity: it.quantity || 1,
-                title: itemTitle,
+            return {
+              ...it,
+              product: {
+                id: it.id || it.product?.id || `prod-${Math.random()}`,
+                name: itemTitle,
                 image: itemImage,
                 price: itemPrice,
-              };
-            }),
-            subtotal: o.subtotal || o.totalAmount,
-            discount: o.discount || 0,
-            deliveryFee: o.deliveryFee || 0,
-            totalAmount: o.totalAmount,
-            status: o.status || 'Processing',
-            paymentStatus: o.paymentStatus || 'paid',
-            shippingAddress: o.shippingAddress || {
-              fullName: customerUser.name || 'Customer',
-              email: customerUser.email || '',
-              phone: customerUser.phone || '',
-              address: '',
-              city: '',
-              state: '',
-              pincode: '',
-            },
-            paymentMethod: o.paymentMethod || 'Razorpay Online (TEST)',
-            paymentMethodDetails: o.paymentMethodDetails,
-            paymentDate: o.paymentDate,
-            paymentTime: o.paymentTime,
-            razorpayOrderId: o.razorpayOrderId,
-            razorpayPaymentId: o.razorpayPaymentId,
-            razorpaySignature: o.razorpaySignature,
-            estimatedDelivery: o.estimatedDelivery || new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          }));
+                originalPrice: it.originalPrice || itemPrice,
+                weight: it.weight || '',
+                category: it.category || '',
+                slug: '',
+                categoryName: '',
+                discountPercent: 0,
+                rating: 5,
+                reviewCount: 0,
+                galleryImages: [],
+                description: '',
+                stock: 10,
+              },
+              quantity: it.quantity || 1,
+              title: itemTitle,
+              image: itemImage,
+              price: itemPrice,
+            };
+          }),
+          subtotal: o.subtotal || o.totalAmount,
+          discount: o.discount || 0,
+          deliveryFee: o.deliveryFee || 0,
+          totalAmount: o.totalAmount,
+          status: o.status || 'Processing',
+          paymentStatus: o.paymentStatus || 'paid',
+          shippingAddress: o.shippingAddress || {
+            fullName: customerUser.name || 'Customer',
+            email: customerUser.email || '',
+            phone: customerUser.phone || '',
+            address: '',
+            city: '',
+            state: '',
+            pincode: '',
+          },
+          paymentMethod: o.paymentMethod || 'Razorpay Online (TEST)',
+          paymentMethodDetails: o.paymentMethodDetails,
+          paymentDate: o.paymentDate,
+          paymentTime: o.paymentTime,
+          razorpayOrderId: o.razorpayOrderId,
+          razorpayPaymentId: o.razorpayPaymentId,
+          razorpaySignature: o.razorpaySignature,
+          estimatedDelivery: o.estimatedDelivery || new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        }));
 
-          setOrders(formatted);
-          const userKey = getCustomerOrdersKey(customerUser);
-          localStorage.setItem(userKey, JSON.stringify(formatted));
-        }
+        setOrders(formatted);
+        const userKey = getCustomerOrdersKey(customerUser);
+        localStorage.setItem(userKey, JSON.stringify(formatted));
       } else {
-        const errData = await res.json().catch(() => ({}));
-        setOrdersError(errData.message || 'Failed to retrieve orders from server.');
+        setOrdersError(res.data?.message || res.error || 'Failed to retrieve orders from server.');
       }
     } catch (err: any) {
       console.warn('Backend order fetch error (offline fallback mode):', err);
-      // If we already loaded orders from local storage, don't show error screen
       if (orders.length === 0) {
         setOrdersError('Unable to connect to orders server. Please check your connection.');
       }
@@ -474,21 +463,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const sendOtp = async (phone: string): Promise<{ success: boolean; message: string; otp?: string }> => {
     try {
-      const response = await fetch(`${API_URL}/auth/send-otp`, {
+      const res = await safeFetch('/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        addToast('OTP Request Failed', data.message || 'Unable to send OTP', 'error');
-        return { success: false, message: data.message || 'Unable to send OTP' };
+      if (res.ok && res.isJson && res.data?.success) {
+        addToast('OTP Sent', `Verification code sent to ${phone}. (Demo OTP: ${res.data.otp || '1234'})`, 'info');
+        return { success: true, message: res.data.message, otp: res.data.otp };
+      } else {
+        const errMsg = res.data?.message || res.error || 'Unable to send OTP';
+        addToast('OTP Request Failed', errMsg, 'error');
+        return { success: false, message: errMsg };
       }
-
-      addToast('OTP Sent', `Verification code sent to ${phone}. (Demo OTP: ${data.otp || '1234'})`, 'info');
-      return { success: true, message: data.message, otp: data.otp };
     } catch (error) {
       console.error('Send OTP error:', error);
       addToast('Demo Mode', `OTP sent to ${phone}. Use code: 1234`, 'info');
@@ -498,21 +486,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const verifyOtp = async (phone: string, otp: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_URL}/auth/verify-otp`, {
+      const res = await safeFetch('/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, otp }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        addToast('Invalid OTP', data.message || 'OTP verification failed', 'error');
+      if (res.ok && res.isJson && res.data?.success) {
+        addToast('Mobile Verified!', 'OTP verification successful.', 'success');
+        return true;
+      } else {
+        addToast('Invalid OTP', res.data?.message || res.error || 'OTP verification failed', 'error');
         return false;
       }
-
-      addToast('Mobile Verified!', 'OTP verification successful.', 'success');
-      return true;
     } catch (error) {
       console.error('Verify OTP error:', error);
       if (otp.trim() === '1234') {
@@ -532,28 +518,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      const response = await fetch(`${API_URL}/auth/login`, {
+      const res = await safeFetch('/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        addToast('Login Failed', data.message || 'Invalid username or password', 'error');
+      if (res.ok && res.isJson && res.data?.success) {
+        if (res.data.token) {
+          localStorage.setItem(CUSTOMER_TOKEN_KEY, res.data.token);
+        }
+        if (res.data.user) {
+          setCustomerUser(res.data.user);
+        }
+        addToast('Welcome Back!', `Logged in successfully as ${res.data.user?.name || username}`, 'success');
+        return true;
+      } else {
+        addToast('Login Failed', res.data?.message || res.error || 'Invalid username or password', 'error');
         return false;
       }
-
-      if (data.token) {
-        localStorage.setItem(CUSTOMER_TOKEN_KEY, data.token);
-      }
-      if (data.user) {
-        setCustomerUser(data.user);
-      }
-
-      addToast('Welcome Back!', `Logged in successfully as ${data.user?.name || username}`, 'success');
-      return true;
     } catch (error) {
       console.error('Login error:', error);
       if (username && password) {
@@ -582,29 +565,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Admin Login
   const adminLogin = async (email: string, password: string): Promise<{ success: boolean; message: string }> => {
     try {
-      const response = await fetch(`${API_URL}/auth/admin-login`, {
+      const res = await safeFetch('/auth/admin-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        const errorMsg = data.message || 'Invalid email or password.';
+      if (res.ok && res.isJson && res.data?.success) {
+        if (res.data.token) {
+          localStorage.setItem(ADMIN_TOKEN_KEY, res.data.token);
+        }
+        if (res.data.user) {
+          setAdminUser(res.data.user);
+        }
+        addToast('Admin Authenticated!', `Welcome to Admin Panel, ${res.data.user?.name || 'Admin'}`, 'success');
+        return { success: true, message: 'Admin login successful' };
+      } else {
+        const errorMsg = res.data?.message || res.error || 'Invalid email or password.';
         addToast('Admin Login Failed', errorMsg, 'error');
         return { success: false, message: errorMsg };
       }
-
-      if (data.token) {
-        localStorage.setItem(ADMIN_TOKEN_KEY, data.token);
-      }
-      if (data.user) {
-        setAdminUser(data.user);
-      }
-
-      addToast('Admin Authenticated!', `Welcome to Admin Panel, ${data.user?.name || 'Admin'}`, 'success');
-      return { success: true, message: 'Admin login successful' };
     } catch (error) {
       console.error('Admin login API error:', error);
       if (email === 'chokku@store.com' && password === 'chokku@123') {
@@ -643,39 +623,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Customer Register
   const register = async (data: RegisterData): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_URL}/auth/register`, {
+      const res = await safeFetch('/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
 
-      const resData = await response.json();
-
-      if (!response.ok || !resData.success) {
-        addToast('Registration Failed', resData.message || 'Could not register user', 'error');
+      if (res.ok && res.isJson && res.data?.success) {
+        if (res.data.token) {
+          localStorage.setItem(CUSTOMER_TOKEN_KEY, res.data.token);
+        }
+        if (res.data.user) {
+          setCustomerUser(res.data.user);
+          saveCustomerToStorage({
+            id: res.data.user.id || 'u-' + Date.now(),
+            name: res.data.user.name || data.name,
+            username: res.data.user.username || data.email || data.username,
+            email: res.data.user.email || data.email || '',
+            phone: data.phone,
+            gender: data.gender,
+            role: 'customer',
+            date: new Date().toISOString().split('T')[0],
+            status: 'Active',
+          });
+        }
+        addToast('Account Created!', `Welcome to Chokku Store, ${res.data.user?.name || data.name}!`, 'success');
+        return true;
+      } else {
+        addToast('Registration Failed', res.data?.message || res.error || 'Could not register user', 'error');
         return false;
       }
-
-      if (resData.token) {
-        localStorage.setItem(CUSTOMER_TOKEN_KEY, resData.token);
-      }
-      if (resData.user) {
-        setCustomerUser(resData.user);
-        saveCustomerToStorage({
-          id: resData.user.id || 'u-' + Date.now(),
-          name: resData.user.name || data.name,
-          username: resData.user.username || data.email || data.username,
-          email: resData.user.email || data.email || '',
-          phone: data.phone,
-          gender: data.gender,
-          role: 'customer',
-          date: new Date().toISOString().split('T')[0],
-          status: 'Active',
-        });
-      }
-
-      addToast('Account Created!', `Welcome to Chokku Store, ${resData.user?.name || data.name}!`, 'success');
-      return true;
     } catch (error) {
       console.error('Registration error:', error);
       const newUser: User = {
@@ -793,7 +770,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider
       value={{
-        user: customerUser, // Main store pages inspect customerUser ONLY
+        user: customerUser,
         customerUser,
         adminUser,
         customerPoints,

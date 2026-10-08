@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { safeFetch } from '../utils/api';
 
 export interface GiftBoxRewardConfig {
   _id?: string;
@@ -59,7 +60,6 @@ interface GameSettingsContextType {
 
 const GameSettingsContext = createContext<GameSettingsContextType | undefined>(undefined);
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const STORAGE_KEY = 'chokku_catch_the_gift_game_settings_v1';
 const IS_CONFIGURED_KEY = 'chokku_catch_game_is_configured_v1';
 
@@ -82,15 +82,12 @@ export const GameSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const refreshSettings = async () => {
     try {
-      const res = await fetch(`${API_URL}/catch-game/settings`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.settings) {
-          setCatchTheGiftSettings({ ...DEFAULT_GAME_SETTINGS, ...data.settings });
-          setIsConfigured(!!data.isConfigured);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(data.settings));
-          localStorage.setItem(IS_CONFIGURED_KEY, data.isConfigured ? 'true' : 'false');
-        }
+      const res = await safeFetch('/catch-game/settings');
+      if (res.ok && res.isJson && res.data?.success && res.data?.settings) {
+        setCatchTheGiftSettings({ ...DEFAULT_GAME_SETTINGS, ...res.data.settings });
+        setIsConfigured(!!res.data.isConfigured);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(res.data.settings));
+        localStorage.setItem(IS_CONFIGURED_KEY, res.data.isConfigured ? 'true' : 'false');
       }
     } catch (err) {
       console.warn('Could not fetch CatchGame settings from server:', err);
@@ -110,16 +107,16 @@ export const GameSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     localStorage.setItem(IS_CONFIGURED_KEY, 'true');
 
     try {
-      const res = await fetch(`${API_URL}/catch-game/settings`, {
+      const res = await safeFetch('/catch-game/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        return { success: true, message: data.message || 'Game settings created in database' };
+
+      if (res.ok && res.isJson && res.data?.success) {
+        return { success: true, message: res.data.message || 'Game settings created in database' };
       } else {
-        return { success: false, message: data.message || 'Settings already created' };
+        return { success: false, message: res.data?.message || res.error || 'Settings already created' };
       }
     } catch (err: any) {
       console.error('Error creating CatchGame settings:', err);
@@ -136,16 +133,16 @@ export const GameSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     localStorage.setItem(IS_CONFIGURED_KEY, 'true');
 
     try {
-      const res = await fetch(`${API_URL}/catch-game/settings`, {
+      const res = await safeFetch('/catch-game/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        return { success: true, message: data.message || 'Game settings updated successfully' };
+
+      if (res.ok && res.isJson && res.data?.success) {
+        return { success: true, message: res.data.message || 'Game settings updated successfully' };
       } else {
-        return { success: false, message: data.message || 'Failed updating backend settings' };
+        return { success: false, message: res.data?.message || res.error || 'Failed updating backend settings' };
       }
     } catch (err: any) {
       console.error('Error updating CatchGame settings:', err);
@@ -158,7 +155,7 @@ export const GameSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_GAME_SETTINGS));
     } catch (e) {
-      console.error('Error resetting game settings:', e);
+      console.error('Error resetting game settings in localStorage:', e);
     }
   };
 

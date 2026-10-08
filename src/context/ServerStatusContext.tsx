@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { safeFetch } from '../utils/api';
 
 interface ServerStatusContextType {
   isServerConnected: boolean;
@@ -8,8 +9,6 @@ interface ServerStatusContextType {
 }
 
 const ServerStatusContext = createContext<ServerStatusContextType | undefined>(undefined);
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isServerConnected, setIsServerConnected] = useState<boolean>(true);
@@ -21,7 +20,7 @@ export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-      const res = await fetch(`${API_URL}/health`, {
+      const res = await safeFetch('/health', {
         method: 'GET',
         signal: controller.signal,
         cache: 'no-store',

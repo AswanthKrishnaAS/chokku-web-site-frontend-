@@ -18,6 +18,7 @@ import {
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useGameSettings } from '../context/GameSettingsContext';
+import { safeFetch } from '../utils/api';
 import { MyGifts } from '../components/MyGifts';
 import gami1 from '../assets/img/gami1.png';
 import gameboy from '../assets/img/gameboy.png';
@@ -474,7 +475,6 @@ export const CatchtheGift: React.FC = () => {
     }
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
       const token = localStorage.getItem('chokku_customer_token_v2') || localStorage.getItem('chokku_token') || '';
       const userId = customerUser?.id || (customerUser as any)?._id || '';
 
@@ -486,7 +486,7 @@ export const CatchtheGift: React.FC = () => {
         bombsHit: itemStatsRef.current.bombs,
       };
 
-      const res = await fetch(`${API_URL}/catch-game/score`, {
+      const res = await safeFetch('/catch-game/score', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -496,9 +496,8 @@ export const CatchtheGift: React.FC = () => {
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        console.log('✅ Customer game score saved to database:', data);
+      if (res.ok && res.data?.success) {
+        console.log('✅ Customer game score saved to database:', res.data);
         fetchCustomerPoints(); // Automatically refresh Navbar & Profile points
       }
     } catch (err) {
