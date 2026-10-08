@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { safeFetch } from '../utils/api';
 
 export interface HomeSlideItem {
   id: string;
@@ -36,31 +37,7 @@ interface WebsiteSettingsContextType {
 
 const WebsiteSettingsContext = createContext<WebsiteSettingsContextType | undefined>(undefined);
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const SLIDERS_STORAGE_KEY = 'chokku_home_sliders_v1';
-
-// Helper to safely parse fetch response without throwing JSON syntax errors on HTML responses
-const safeParseJsonResponse = async (res: Response) => {
-  try {
-    const contentType = res.headers.get('content-type') || '';
-    const text = await res.text();
-    if (!text || !text.trim()) {
-      return { isJson: false, data: null, text: '' };
-    }
-    const trimmed = text.trim();
-    if (contentType.includes('application/json') || trimmed.startsWith('{') || trimmed.startsWith('[')) {
-      try {
-        const data = JSON.parse(text);
-        return { isJson: true, data, text };
-      } catch {
-        return { isJson: false, data: null, text };
-      }
-    }
-    return { isJson: false, data: null, text };
-  } catch {
-    return { isJson: false, data: null, text: '' };
-  }
-};
 
 export const WebsiteSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [navbarLogo, setNavbarLogoState] = useState<string>(() => {
@@ -104,23 +81,17 @@ export const WebsiteSettingsProvider: React.FC<{ children: React.ReactNode }> = 
   const fetchHomepageSliders = async () => {
     try {
       // 1. Try admin endpoint first
-      const res = await fetch(`${API_URL}/homepage-sliders/admin`);
-      if (res.ok) {
-        const parsed = await safeParseJsonResponse(res);
-        if (parsed.isJson && parsed.data?.success && Array.isArray(parsed.data?.sliders)) {
-          setHomeSliders(parsed.data.sliders);
-          return;
-        }
+      const res = await safeFetch('/homepage-sliders/admin');
+      if (res.ok && res.isJson && res.data?.success && Array.isArray(res.data?.sliders)) {
+        setHomeSliders(res.data.sliders);
+        return;
       }
 
       // 2. Try customer store endpoint fallback
-      const fallbackRes = await fetch(`${API_URL}/homepage-sliders`);
-      if (fallbackRes.ok) {
-        const parsed = await safeParseJsonResponse(fallbackRes);
-        if (parsed.isJson && parsed.data?.success && Array.isArray(parsed.data?.sliders)) {
-          setHomeSliders(parsed.data.sliders);
-          return;
-        }
+      const fallbackRes = await safeFetch('/homepage-sliders');
+      if (fallbackRes.ok && fallbackRes.isJson && fallbackRes.data?.success && Array.isArray(fallbackRes.data?.sliders)) {
+        setHomeSliders(fallbackRes.data.sliders);
+        return;
       }
     } catch (err) {
       console.warn('Could not fetch homepage sliders from API:', err);
@@ -130,12 +101,9 @@ export const WebsiteSettingsProvider: React.FC<{ children: React.ReactNode }> = 
   const refreshSettings = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch(`${API_URL}/website-settings`);
-      if (res.ok) {
-        const parsed = await safeParseJsonResponse(res);
-        if (parsed.isJson && parsed.data?.success && parsed.data?.settings?.navbarLogo) {
-          setNavbarLogo(parsed.data.settings.navbarLogo);
-        }
+      const res = await safeFetch('/website-settings');
+      if (res.ok && res.isJson && res.data?.success && res.data?.settings?.navbarLogo) {
+        setNavbarLogo(res.data.settings.navbarLogo);
       }
       await fetchHomepageSliders();
     } catch (err) {
@@ -154,23 +122,22 @@ export const WebsiteSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     formData.append('logo', file);
 
     try {
-      const res = await fetch(`${API_URL}/website-settings/upload-logo`, {
+      const res = await safeFetch('/website-settings/upload-logo', {
         method: 'POST',
         body: formData,
       });
 
-      const parsed = await safeParseJsonResponse(res);
-      if (res.ok && parsed.isJson && parsed.data?.success && parsed.data?.navbarLogo) {
-        setNavbarLogo(parsed.data.navbarLogo);
+      if (res.ok && res.isJson && res.data?.success && res.data?.navbarLogo) {
+        setNavbarLogo(res.data.navbarLogo);
         return {
           success: true,
-          message: parsed.data.message || 'Navbar logo updated successfully',
-          navbarLogo: parsed.data.navbarLogo,
+          message: res.data.message || 'Navbar logo updated successfully',
+          navbarLogo: res.data.navbarLogo,
         };
       } else {
         return {
           success: false,
-          message: parsed.data?.message || 'Failed to upload navbar logo',
+          message: res.data?.message || res.error || 'Failed to upload navbar logo',
         };
       }
     } catch (err: any) {
@@ -187,17 +154,16 @@ export const WebsiteSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     formData.append('sliderImage', file);
 
     try {
-      const res = await fetch(`${API_URL}/homepage-sliders/upload-image`, {
+      const res = await safeFetch('/homepage-sliders/upload-image', {
         method: 'POST',
         body: formData,
       });
 
-      const parsed = await safeParseJsonResponse(res);
-      if (res.ok && parsed.isJson && parsed.data?.success && parsed.data?.imageUrl) {
+      if (res.ok && res.isJson && res.data?.success && res.data?.imageUrl) {
         return {
           success: true,
-          message: parsed.data.message || 'Banner image uploaded successfully',
-          imageUrl: parsed.data.imageUrl,
+          message: res.data.message || 'Banner image uploaded successfully',
+          imageUrl: res.data.imageUrl,
         };
       }
     } catch (err: any) {
@@ -215,19 +181,18 @@ export const WebsiteSettingsProvider: React.FC<{ children: React.ReactNode }> = 
 
   const createSlider = async (slideData: Partial<HomeSlideItem>) => {
     try {
-      const res = await fetch(`${API_URL}/homepage-sliders`, {
+      const res = await safeFetch('/homepage-sliders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(slideData),
       });
 
-      const parsed = await safeParseJsonResponse(res);
-      if (res.ok && parsed.isJson && parsed.data?.success && parsed.data?.slider) {
+      if (res.ok && res.isJson && res.data?.success && res.data?.slider) {
         await fetchHomepageSliders();
         return {
           success: true,
-          message: parsed.data.message || 'Homepage slider created successfully',
-          slider: parsed.data.slider,
+          message: res.data.message || 'Homepage slider created successfully',
+          slider: res.data.slider,
         };
       }
     } catch (err: any) {
@@ -273,19 +238,18 @@ export const WebsiteSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     const isMongoId = Boolean(id && id.length === 24 && /^[0-9a-fA-F]{24}$/.test(id));
     if (isMongoId) {
       try {
-        const res = await fetch(`${API_URL}/homepage-sliders/${id}`, {
+        const res = await safeFetch(`/homepage-sliders/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(slideData),
         });
 
-        const parsed = await safeParseJsonResponse(res);
-        if (res.ok && parsed.isJson && parsed.data?.success && parsed.data?.slider) {
+        if (res.ok && res.isJson && res.data?.success && res.data?.slider) {
           await fetchHomepageSliders();
           return {
             success: true,
-            message: parsed.data.message || 'Homepage slider updated successfully',
-            slider: parsed.data.slider,
+            message: res.data.message || 'Homepage slider updated successfully',
+            slider: res.data.slider,
           };
         }
       } catch (err: any) {
@@ -319,19 +283,18 @@ export const WebsiteSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     const isMongoId = Boolean(id && id.length === 24 && /^[0-9a-fA-F]{24}$/.test(id));
     if (isMongoId) {
       try {
-        const res = await fetch(`${API_URL}/homepage-sliders/${id}/status`, {
+        const res = await safeFetch(`/homepage-sliders/${id}/status`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status }),
         });
 
-        const parsed = await safeParseJsonResponse(res);
-        if (res.ok && parsed.isJson && parsed.data?.success && parsed.data?.slider) {
+        if (res.ok && res.isJson && res.data?.success && res.data?.slider) {
           await fetchHomepageSliders();
           return {
             success: true,
-            message: parsed.data.message || 'Slider status updated',
-            slider: parsed.data.slider,
+            message: res.data.message || 'Slider status updated',
+            slider: res.data.slider,
           };
         }
       } catch (err: any) {
@@ -384,15 +347,14 @@ export const WebsiteSettingsProvider: React.FC<{ children: React.ReactNode }> = 
 
     // 2. Call backend DELETE endpoint if valid MongoDB ObjectId
     try {
-      const res = await fetch(`${API_URL}/homepage-sliders/${id}`, {
+      const res = await safeFetch(`/homepage-sliders/${id}`, {
         method: 'DELETE',
       });
 
-      const parsed = await safeParseJsonResponse(res);
-      if (res.ok && parsed.isJson && parsed.data?.success) {
+      if (res.ok && res.isJson && res.data?.success) {
         return {
           success: true,
-          message: parsed.data?.message || 'Slider banner deleted successfully',
+          message: res.data?.message || 'Slider banner deleted successfully',
         };
       }
       return {
@@ -462,4 +424,3 @@ export const useWebsiteSettings = () => {
   }
   return context;
 };
-

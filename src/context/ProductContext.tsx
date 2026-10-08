@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product, ProductReview } from '../types';
+import { safeFetch } from '../utils/api';
 
 interface ProductContextType {
   products: Product[];
@@ -18,7 +19,6 @@ interface ProductContextType {
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const PRODUCTS_STORAGE_KEY = 'chokku_products_v2';
 
 export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -45,12 +45,9 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const refreshProducts = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch(`${API_URL}/products`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.products)) {
-          saveProductsLocal(data.products);
-        }
+      const res = await safeFetch('/products');
+      if (res.ok && res.isJson && res.data?.success && Array.isArray(res.data?.products)) {
+        saveProductsLocal(res.data.products);
       }
     } catch (err) {
       console.warn('Could not fetch products from server:', err);
@@ -64,164 +61,111 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const uploadProductImages = async (files: File[]) => {
-    if (!files || files.length === 0) {
-      return { success: false, message: 'No image files selected' };
-    }
-
     const formData = new FormData();
-    // Allow up to 7 images
-    const limitFiles = files.slice(0, 7);
-    limitFiles.forEach((file) => {
-      formData.append('productImages', file);
-    });
+    files.forEach((file) => formData.append('productImages', file));
 
     try {
-      const res = await fetch(`${API_URL}/products/upload-images`, {
+      const res = await safeFetch('/products/upload-images', {
         method: 'POST',
         body: formData,
       });
 
-      const data = await res.json();
-      if (res.ok && data.success && Array.isArray(data.imageUrls)) {
+      if (res.ok && res.isJson && res.data?.success && Array.isArray(res.data?.imageUrls)) {
         return {
           success: true,
-          message: data.message || 'Product images uploaded successfully',
-          imageUrls: data.imageUrls,
+          message: res.data.message || 'Images uploaded successfully',
+          imageUrls: res.data.imageUrls,
         };
       } else {
         return {
           success: false,
-          message: data.message || 'Failed to upload product images',
+          message: res.data?.message || res.error || 'Failed to upload product images',
         };
       }
     } catch (err: any) {
-      console.error('Product images upload error:', err);
+      console.error('Upload product images error:', err);
       return {
         success: false,
-        message: err.message || 'Network error during images upload',
+        message: err.message || 'Network error during image upload',
       };
     }
   };
 
   const uploadTryOnImages = async (files: File[]) => {
-    if (!files || files.length === 0) {
-      return { success: false, message: 'No Try On image files selected' };
-    }
-
     const formData = new FormData();
-    // Allow up to 5 PNG images
-    const limitFiles = files.slice(0, 5);
-    limitFiles.forEach((file) => {
-      formData.append('tryOnImages', file);
-    });
+    files.forEach((file) => formData.append('tryOnImages', file));
 
     try {
-      const res = await fetch(`${API_URL}/products/upload-tryon-images`, {
+      const res = await safeFetch('/products/upload-tryon-images', {
         method: 'POST',
         body: formData,
       });
 
-      const data = await res.json();
-      if (res.ok && data.success && Array.isArray(data.imageUrls)) {
+      if (res.ok && res.isJson && res.data?.success && Array.isArray(res.data?.imageUrls)) {
         return {
           success: true,
-          message: data.message || 'Try On PNG images uploaded successfully',
-          imageUrls: data.imageUrls,
+          message: res.data.message || 'Try-On images uploaded successfully',
+          imageUrls: res.data.imageUrls,
         };
       } else {
         return {
           success: false,
-          message: data.message || 'Failed to upload Try On PNG images',
+          message: res.data?.message || res.error || 'Failed to upload Try-On images',
         };
       }
     } catch (err: any) {
-      console.error('Try On images upload error:', err);
+      console.error('Upload Try-On images error:', err);
       return {
         success: false,
-        message: err.message || 'Network error during Try On images upload',
+        message: err.message || 'Network error during Try-On upload',
       };
     }
   };
 
   const addProductOrUpdate = async (productData: Partial<Product>) => {
     try {
-      const res = await fetch(`${API_URL}/products`, {
+      const res = await safeFetch('/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(productData),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        if (Array.isArray(data.products)) {
-          saveProductsLocal(data.products);
+      if (res.ok && res.isJson && res.data?.success) {
+        if (Array.isArray(res.data.products)) {
+          saveProductsLocal(res.data.products);
+        } else {
+          await refreshProducts();
         }
         return {
           success: true,
-          message: data.message || 'Product saved successfully',
+          message: res.data.message || 'Product saved successfully',
         };
       } else {
         return {
           success: false,
-          message: data.message || 'Failed to save product to server',
+          message: res.data?.message || res.error || 'Failed to save product',
         };
       }
     } catch (err: any) {
       console.error('Save product error:', err);
-      // Offline fallback
-      const prodId = productData.id || 'prod-' + Date.now();
-      const slug = (productData.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const updated = products.filter((p) => p.id !== prodId);
-      const newProd: Product = {
-        id: prodId,
-        name: productData.name || 'New Product',
-        slug,
-        category: productData.category || 'general',
-        categoryName: productData.categoryName || 'General',
-        price: productData.price || 0,
-        originalPrice: productData.originalPrice || productData.price || 0,
-        discountPercent: productData.discountPercent || 0,
-        discountTag: productData.discountTag || '',
-        rating: productData.rating || 5.0,
-        reviewCount: productData.reviewCount || 0,
-        image: productData.image || (productData.galleryImages && productData.galleryImages[0]) || '',
-        galleryImages: productData.galleryImages || [],
-        description: productData.description || '',
-        stock: productData.stock || 0,
-        highlights: productData.highlights || [],
-        additionalDetails: productData.additionalDetails || '',
-        sizes: productData.sizes || [],
-        isFeatured: productData.isFeatured || false,
-        isNewArrival: productData.isNewArrival || false,
-        isBestSeller: productData.isBestSeller || false,
-        tryOn: productData.tryOn || false,
-        tryOnImages: productData.tryOnImages || [],
-      };
-      saveProductsLocal([newProd, ...updated]);
       return {
-        success: true,
-        message: 'Product saved locally (Offline mode)',
+        success: false,
+        message: err.message || 'Error saving product',
       };
     }
   };
 
   const deleteProduct = async (productId: string) => {
-    const updated = products.filter((p) => p.id !== productId);
-    saveProductsLocal(updated);
+    const updatedLocal = products.filter((p) => p.id !== productId);
+    saveProductsLocal(updatedLocal);
 
     try {
-      const res = await fetch(`${API_URL}/products/${productId}`, {
+      const res = await safeFetch(`/products/${productId}`, {
         method: 'DELETE',
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        if (Array.isArray(data.products)) {
-          saveProductsLocal(data.products);
-        }
-        return {
-          success: true,
-          message: data.message || 'Product deleted successfully',
-        };
+
+      if (res.ok && res.isJson && res.data?.success && Array.isArray(res.data?.products)) {
+        saveProductsLocal(res.data.products);
       }
     } catch (err) {
       console.error('Delete product error:', err);
@@ -229,107 +173,65 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     return {
       success: true,
-      message: 'Product deleted locally',
+      message: 'Product deleted successfully',
     };
   };
 
   const addOrUpdateReview = async (productId: string, reviewData: Partial<ProductReview>) => {
     try {
-      const isEdit = Boolean(reviewData.id);
-      const url = isEdit
-        ? `${API_URL}/products/${productId}/reviews/${reviewData.id}`
-        : `${API_URL}/products/${productId}/reviews`;
-      const method = isEdit ? 'PUT' : 'POST';
+      const endpoint = reviewData.id
+        ? `/products/${productId}/reviews/${reviewData.id}`
+        : `/products/${productId}/reviews`;
+      const method = reviewData.id ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await safeFetch(endpoint, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(reviewData),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        if (Array.isArray(data.products)) {
-          saveProductsLocal(data.products);
+      if (res.ok && res.isJson && res.data?.success) {
+        if (res.data.product) {
+          const updatedProds = products.map((p) => (p.id === productId ? res.data.product : p));
+          saveProductsLocal(updatedProds);
+        } else {
+          await refreshProducts();
         }
         return {
           success: true,
-          message: data.message || 'Review saved successfully',
+          message: res.data.message || 'Review saved successfully',
         };
       } else {
         return {
           success: false,
-          message: data.message || 'Failed to save review',
+          message: res.data?.message || res.error || 'Failed to save review',
         };
       }
     } catch (err: any) {
       console.error('Save review error:', err);
-      // Local fallback
-      const targetProd = products.find((p) => p.id === productId);
-      if (!targetProd) return { success: false, message: 'Product not found' };
-
-      const reviewsList = targetProd.reviews ? [...targetProd.reviews] : [];
-      if (reviewData.id) {
-        const idx = reviewsList.findIndex((r) => r.id === reviewData.id);
-        if (idx !== -1) {
-          reviewsList[idx] = { ...reviewsList[idx], ...reviewData } as ProductReview;
-        }
-        const newRev: ProductReview = {
-          id: 'rev-' + Date.now(),
-          customerName: reviewData.customerName || 'Customer',
-          rating: reviewData.rating || 5,
-          comment: reviewData.comment || '',
-          date: reviewData.date || new Date().toISOString().split('T')[0],
-          image: reviewData.image || (reviewData.images && reviewData.images[0]) || '',
-          images: reviewData.images || (reviewData.image ? [reviewData.image] : []),
-        };
-        reviewsList.push(newRev);
-      }
-
-      const total = reviewsList.reduce((sum, r) => sum + r.rating, 0);
-      const updatedProd: Product = {
-        ...targetProd,
-        reviews: reviewsList,
-        rating: Number((total / reviewsList.length).toFixed(1)),
-        reviewCount: reviewsList.length,
-      };
-
-      const updatedProds = products.map((p) => (p.id === productId ? updatedProd : p));
-      saveProductsLocal(updatedProds);
-
       return {
-        success: true,
-        message: 'Review saved locally (Offline mode)',
+        success: false,
+        message: err.message || 'Error saving review',
       };
     }
   };
 
   const deleteReview = async (productId: string, reviewId: string) => {
-    // Optimistic local update
-    const targetProd = products.find((p) => p.id === productId);
-    if (targetProd && Array.isArray(targetProd.reviews)) {
-      const filteredReviews = targetProd.reviews.filter((r) => r.id !== reviewId);
-      const total = filteredReviews.reduce((sum, r) => sum + r.rating, 0);
-      const updatedProd: Product = {
-        ...targetProd,
-        reviews: filteredReviews,
-        rating: filteredReviews.length > 0 ? Number((total / filteredReviews.length).toFixed(1)) : 5.0,
-        reviewCount: filteredReviews.length,
-      };
-      const updatedProds = products.map((p) => (p.id === productId ? updatedProd : p));
-      saveProductsLocal(updatedProds);
-    }
-
     try {
-      const res = await fetch(`${API_URL}/products/${productId}/reviews/${reviewId}`, {
+      const res = await safeFetch(`/products/${productId}/reviews/${reviewId}`, {
         method: 'DELETE',
       });
-      const data = await res.json();
-      if (res.ok && data.success && Array.isArray(data.products)) {
-        saveProductsLocal(data.products);
+
+      if (res.ok && res.isJson && res.data?.success) {
+        if (res.data.product) {
+          const updatedProds = products.map((p) => (p.id === productId ? res.data.product : p));
+          saveProductsLocal(updatedProds);
+        } else {
+          await refreshProducts();
+        }
         return {
           success: true,
-          message: data.message || 'Review deleted successfully',
+          message: res.data.message || 'Review deleted successfully',
         };
       }
     } catch (err) {
@@ -344,23 +246,22 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const fetchMeeshoProductDetails = async (url: string) => {
     try {
-      const res = await fetch(`${API_URL}/products/fetch-meesho-details`, {
+      const res = await safeFetch('/products/fetch-meesho-details', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
+      if (res.ok && res.isJson && res.data?.success) {
         return {
           success: true,
-          message: data.message || 'Product details fetched successfully',
-          data: data.data,
+          message: res.data.message || 'Product details fetched successfully',
+          data: res.data.data,
         };
       } else {
         return {
           success: false,
-          message: data.message || 'Failed to fetch Meesho product details',
+          message: res.data?.message || res.error || 'Failed to fetch Meesho product details',
         };
       }
     } catch (err: any) {
@@ -374,23 +275,22 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const fetchMeeshoReviews = async (url: string, count: number | string = 30) => {
     try {
-      const res = await fetch(`${API_URL}/products/fetch-meesho-reviews`, {
+      const res = await safeFetch('/products/fetch-meesho-reviews', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, count }),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
+      if (res.ok && res.isJson && res.data?.success) {
         return {
           success: true,
-          message: data.message || 'Product reviews fetched successfully',
-          data: data.data,
+          message: res.data.message || 'Product reviews fetched successfully',
+          data: res.data.data,
         };
       } else {
         return {
           success: false,
-          message: data.message || 'Failed to fetch Meesho product reviews',
+          message: res.data?.message || res.error || 'Failed to fetch Meesho product reviews',
         };
       }
     } catch (err: any) {
@@ -404,53 +304,34 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const importReviews = async (productId: string, reviewsToImport: ProductReview[]) => {
     try {
-      const res = await fetch(`${API_URL}/products/${productId}/import-reviews`, {
+      const res = await safeFetch(`/products/${productId}/import-reviews`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reviews: reviewsToImport }),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        if (data.product) {
-          const updatedProds = products.map((p) => (p.id === productId ? data.product : p));
+      if (res.ok && res.isJson && res.data?.success) {
+        if (res.data.product) {
+          const updatedProds = products.map((p) => (p.id === productId ? res.data.product : p));
           saveProductsLocal(updatedProds);
         } else {
           await refreshProducts();
         }
         return {
           success: true,
-          message: data.message || `Successfully imported ${reviewsToImport.length} reviews!`,
+          message: res.data.message || `Successfully imported ${reviewsToImport.length} reviews!`,
         };
       } else {
         return {
           success: false,
-          message: data.message || 'Failed to import reviews',
+          message: res.data?.message || res.error || 'Failed to import reviews',
         };
       }
     } catch (err: any) {
       console.error('Import reviews error:', err);
-      // Offline fallback
-      const targetProd = products.find((p) => p.id === productId);
-      if (!targetProd) return { success: false, message: 'Product not found' };
-
-      const existing = targetProd.reviews || [];
-      const updatedReviews = [...existing, ...reviewsToImport];
-      const total = updatedReviews.reduce((sum, r) => sum + r.rating, 0);
-
-      const updatedProd: Product = {
-        ...targetProd,
-        reviews: updatedReviews,
-        rating: Number((total / updatedReviews.length).toFixed(1)),
-        reviewCount: updatedReviews.length,
-      };
-
-      const updatedProds = products.map((p) => (p.id === productId ? updatedProd : p));
-      saveProductsLocal(updatedProds);
-
       return {
-        success: true,
-        message: 'Reviews imported locally (Offline mode)',
+        success: false,
+        message: err.message || 'Error importing reviews',
       };
     }
   };

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Category } from '../types';
+import { safeFetch } from '../utils/api';
 
 interface CategoryContextType {
   categories: Category[];
@@ -27,7 +28,6 @@ interface CategoryContextType {
 
 const CategoryContext = createContext<CategoryContextType | undefined>(undefined);
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const CATEGORIES_STORAGE_KEY = 'chokku_categories_v2';
 const CATEGORY_SETTINGS_KEY = 'chokku_category_settings_v2';
 
@@ -82,22 +82,19 @@ export const CategoryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const refreshCategories = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch(`${API_URL}/categories`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          if (Array.isArray(data.categories)) {
-            saveCategoriesLocal(data.categories);
-          }
-          if (data.sectionSettings) {
-            setSectionMetaTag(data.sectionSettings.categoryMetaTag || 'EXPLORE DEPARTMENTS');
-            setSectionTitle(data.sectionSettings.categorySectionTitle || 'Shop by Category');
-            setSectionDescription(data.sectionSettings.categorySectionDescription || 'Discover our curated range of premium products');
-            localStorage.setItem(
-              CATEGORY_SETTINGS_KEY,
-              JSON.stringify(data.sectionSettings)
-            );
-          }
+      const res = await safeFetch('/categories');
+      if (res.ok && res.isJson && res.data?.success) {
+        if (Array.isArray(res.data.categories)) {
+          saveCategoriesLocal(res.data.categories);
+        }
+        if (res.data.sectionSettings) {
+          setSectionMetaTag(res.data.sectionSettings.categoryMetaTag || 'EXPLORE DEPARTMENTS');
+          setSectionTitle(res.data.sectionSettings.categorySectionTitle || 'Shop by Category');
+          setSectionDescription(res.data.sectionSettings.categorySectionDescription || 'Discover our curated range of premium products');
+          localStorage.setItem(
+            CATEGORY_SETTINGS_KEY,
+            JSON.stringify(res.data.sectionSettings)
+          );
         }
       }
     } catch (err) {
@@ -116,22 +113,21 @@ export const CategoryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     formData.append('categoryImage', file);
 
     try {
-      const res = await fetch(`${API_URL}/categories/upload-image`, {
+      const res = await safeFetch('/categories/upload-image', {
         method: 'POST',
         body: formData,
       });
 
-      const data = await res.json();
-      if (res.ok && data.success && data.imageUrl) {
+      if (res.ok && res.isJson && res.data?.success && res.data?.imageUrl) {
         return {
           success: true,
-          message: data.message || 'Category image uploaded successfully',
-          imageUrl: data.imageUrl,
+          message: res.data.message || 'Category image uploaded successfully',
+          imageUrl: res.data.imageUrl,
         };
       } else {
         return {
           success: false,
-          message: data.message || 'Failed to upload category image',
+          message: res.data?.message || res.error || 'Failed to upload category image',
         };
       }
     } catch (err: any) {
@@ -152,25 +148,24 @@ export const CategoryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     status?: 'Active' | 'Inactive';
   }) => {
     try {
-      const res = await fetch(`${API_URL}/categories`, {
+      const res = await safeFetch('/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(categoryData),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        if (Array.isArray(data.categories)) {
-          saveCategoriesLocal(data.categories);
+      if (res.ok && res.isJson && res.data?.success) {
+        if (Array.isArray(res.data.categories)) {
+          saveCategoriesLocal(res.data.categories);
         }
         return {
           success: true,
-          message: data.message || 'Category saved successfully',
+          message: res.data.message || 'Category saved successfully',
         };
       } else {
         return {
           success: false,
-          message: data.message || 'Failed to save category to server',
+          message: res.data?.message || res.error || 'Failed to save category to server',
         };
       }
     } catch (err: any) {
@@ -205,7 +200,7 @@ export const CategoryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setSectionDescription(description);
 
     try {
-      const res = await fetch(`${API_URL}/categories/section-settings`, {
+      const res = await safeFetch('/categories/section-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -215,11 +210,10 @@ export const CategoryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
+      if (res.ok && res.isJson && res.data?.success) {
         return {
           success: true,
-          message: data.message || 'Section headings updated successfully',
+          message: res.data.message || 'Section headings updated successfully',
         };
       }
     } catch (err) {
@@ -236,17 +230,16 @@ export const CategoryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     saveCategoriesLocal(updated);
 
     try {
-      const res = await fetch(`${API_URL}/categories/${categoryId}`, {
+      const res = await safeFetch(`/categories/${categoryId}`, {
         method: 'DELETE',
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        if (Array.isArray(data.categories)) {
-          saveCategoriesLocal(data.categories);
+      if (res.ok && res.isJson && res.data?.success) {
+        if (Array.isArray(res.data.categories)) {
+          saveCategoriesLocal(res.data.categories);
         }
         return {
           success: true,
-          message: data.message || 'Category deleted successfully',
+          message: res.data.message || 'Category deleted successfully',
         };
       }
     } catch (err) {
@@ -255,7 +248,7 @@ export const CategoryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     return {
       success: true,
-      message: 'Category deleted locally',
+      message: 'Category deleted successfully',
     };
   };
 

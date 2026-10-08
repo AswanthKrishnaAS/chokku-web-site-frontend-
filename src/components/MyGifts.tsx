@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { safeFetch } from '../utils/api';
 
 export interface GiftItem {
   _id: string;
@@ -57,23 +58,19 @@ export const MyGifts: React.FC<MyGiftsProps> = ({ onGiftOpened }) => {
     if (!isAuthenticated || !customerUser) return;
     setLoading(true);
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
       const token = localStorage.getItem('chokku_customer_token_v2') || localStorage.getItem('chokku_token') || '';
       const userId = customerUser?.id || (customerUser as any)?._id || '';
 
-      const res = await fetch(`${API_URL}/catch-game/my-gifts`, {
+      const res = await safeFetch('/catch-game/my-gifts', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'x-user-id': userId,
         },
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setUnopenedGifts(data.unopenedGifts || []);
-          setOpenedGifts(data.openedGifts || []);
-        }
+      if (res.ok && res.data?.success) {
+        setUnopenedGifts(res.data.unopenedGifts || []);
+        setOpenedGifts(res.data.openedGifts || []);
       }
     } catch (err) {
       console.warn('Error fetching customer gifts:', err);
@@ -97,11 +94,10 @@ export const MyGifts: React.FC<MyGiftsProps> = ({ onGiftOpened }) => {
     // Play box shaking & confetti animation for 1.4s before calling backend
     setTimeout(async () => {
       try {
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
         const token = localStorage.getItem('chokku_customer_token_v2') || localStorage.getItem('chokku_token') || '';
         const userId = customerUser?.id || (customerUser as any)?._id || '';
 
-        const res = await fetch(`${API_URL}/catch-game/open-gift/${gift._id}`, {
+        const res = await safeFetch(`/catch-game/open-gift/${gift._id}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -110,15 +106,14 @@ export const MyGifts: React.FC<MyGiftsProps> = ({ onGiftOpened }) => {
           },
         });
 
-        const data = await res.json();
-        if (res.ok && data.success && data.gift) {
-          setRevealedReward(data.gift);
-          addToast('🎉 Gift Opened!', data.message || 'Reward revealed!', 'success');
+        if (res.ok && res.data?.success && res.data?.gift) {
+          setRevealedReward(res.data.gift);
+          addToast('🎉 Gift Opened!', res.data.message || 'Reward revealed!', 'success');
           await fetchMyGifts();
           await fetchCustomerPoints();
           if (onGiftOpened) onGiftOpened();
         } else {
-          addToast('Error', data.message || 'Failed to open gift box', 'error');
+          addToast('Error', res.data?.message || 'Failed to open gift box', 'error');
           setOpeningGift(null);
         }
       } catch (err) {

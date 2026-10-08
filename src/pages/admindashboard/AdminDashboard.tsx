@@ -52,9 +52,9 @@ import { useGameSettings, GiftBoxRewardConfig } from '../../context/GameSettings
 import { PRODUCTS } from '../../data/products';
 import { CATEGORIES } from '../../data/categories';
 import { Product, Order } from '../../types';
-import loginImg from '../../assets/img/login.png';
 import notificationAudioSound from '../../assets/notification.mp3';
 import { socket } from '../../socket';
+import { safeFetch } from '../../utils/api';
 
 interface AdminNotification {
   id: string;
@@ -215,11 +215,9 @@ export const AdminDashboard: React.FC = () => {
   React.useEffect(() => {
     const fetchScores = async () => {
       try {
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-        const res = await fetch(`${API_URL}/catch-game/all-scores`);
-        const data = await res.json();
-        if (res.ok && data.success && Array.isArray(data.scores)) {
-          setCustomerScoresList(data.scores);
+        const res = await safeFetch('/catch-game/all-scores');
+        if (res.ok && res.isJson && res.data?.success && Array.isArray(res.data?.scores)) {
+          setCustomerScoresList(res.data.scores);
         }
       } catch (err) {
         console.warn('Could not fetch game scores from API:', err);
@@ -438,12 +436,10 @@ export const AdminDashboard: React.FC = () => {
   React.useEffect(() => {
     const fetchAdminOrders = async () => {
       try {
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-        const res = await fetch(`${API_URL}/orders/admin/all`);
-        const data = await res.json();
-        if (res.ok && data.success && Array.isArray(data.orders)) {
-          setAdminOrders(data.orders);
-          localStorage.setItem('chokku_all_orders', JSON.stringify(data.orders));
+        const res = await safeFetch('/orders/admin/all');
+        if (res.ok && res.isJson && res.data?.success && Array.isArray(res.data?.orders)) {
+          setAdminOrders(res.data.orders);
+          localStorage.setItem('chokku_all_orders', JSON.stringify(res.data.orders));
         }
       } catch (err) {
         console.warn('Could not fetch admin orders from API:', err);
@@ -509,11 +505,9 @@ export const AdminDashboard: React.FC = () => {
   React.useEffect(() => {
     const fetchCustomers = async () => {
       try {
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-        const res = await fetch(`${API_URL}/auth/customers`);
-        const data = await res.json();
-        if (res.ok && data.success && Array.isArray(data.customers)) {
-          setRegisteredCustomersList(data.customers);
+        const res = await safeFetch('/auth/customers');
+        if (res.ok && res.isJson && res.data?.success && Array.isArray(res.data?.customers)) {
+          setRegisteredCustomersList(res.data.customers);
         }
       } catch (err) {
         console.error('Failed to fetch customers from API:', err);

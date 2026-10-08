@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { Button } from '../components/Button';
 import { Order, ShippingAddress } from '../types';
 import { fetchAddressByPincode } from '../utils/pincode';
+import { safeFetch } from '../utils/api';
 
 export interface SavedAddress {
   id: string;
@@ -255,15 +256,14 @@ export const Checkout: React.FC = () => {
     // 1. CASH ON DELIVERY (COD) FLOW
     if (paymentMethod === 'cod') {
       try {
-        const response = await fetch(`${API_URL}/orders/create-cod-order`, {
+        const response = await safeFetch('/orders/create-cod-order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(orderPayload),
         });
 
-        const data = await response.json();
-
-        if (response.ok && data.success) {
+        if (response.ok && response.isJson && response.data?.success) {
+          const data = response.data;
           const newOrder: Order = {
             id: data.order.orderCustomId,
             date: new Date().toISOString().split('T')[0],
@@ -286,7 +286,7 @@ export const Checkout: React.FC = () => {
           addToast('Order Confirmed!', `COD Order ${newOrder.id} placed successfully.`, 'success');
           return;
         } else {
-          throw new Error(data.message || 'Failed to place COD order');
+          throw new Error(response.data?.message || response.error || 'Failed to place COD order');
         }
       } catch (err: any) {
         console.warn('Backend COD error, using local order creation fallback:', err);
@@ -316,20 +316,20 @@ export const Checkout: React.FC = () => {
 
     // 2. RAZORPAY TEST PAYMENT FLOW (Card / UPI / NetBanking / Wallet)
     try {
-      // Step A: Request Razorpay Order ID from backend Node server (localhost:5000)
-      const res = await fetch(`${API_URL}/orders/create-razorpay-order`, {
+      // Step A: Request Razorpay Order ID from backend Node server
+      const res = await safeFetch('/orders/create-razorpay-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(orderPayload),
       });
 
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
+      if (!res.ok || !res.isJson || !res.data?.success) {
         setIsSubmitting(false);
-        addToast('Payment Error', data.message || 'Could not initiate Razorpay order.', 'error');
+        addToast('Payment Error', res.data?.message || res.error || 'Could not initiate Razorpay order.', 'error');
         return;
       }
+
+      const data = res.data;
 
       // Check if Razorpay SDK script is loaded
       if (typeof (window as any).Razorpay === 'undefined') {
@@ -349,7 +349,7 @@ export const Checkout: React.FC = () => {
         handler: async (response: any) => {
           // Step C: Verify payment signature with Node backend
           try {
-            const verifyRes = await fetch(`${API_URL}/orders/verify-razorpay-payment`, {
+            const verifyRes = await safeFetch('/orders/verify-razorpay-payment', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -360,9 +360,7 @@ export const Checkout: React.FC = () => {
               }),
             });
 
-            const verifyData = await verifyRes.json();
-
-            if (verifyRes.ok && verifyData.success) {
+            if (verifyRes.ok && verifyRes.isJson && verifyRes.data?.success) {
               const newOrder: Order = {
                 id: data.orderCustomId,
                 date: new Date().toISOString().split('T')[0],
@@ -392,7 +390,7 @@ export const Checkout: React.FC = () => {
               );
             } else {
               setIsSubmitting(false);
-              addToast('Payment Verification Failed', verifyData.message || 'Signature verification failed.', 'error');
+              addToast('Payment Verification Failed', verifyRes.data?.message || 'Signature verification failed.', 'error');
             }
           } catch (verifyErr) {
             console.error('Razorpay verification error:', verifyErr);
