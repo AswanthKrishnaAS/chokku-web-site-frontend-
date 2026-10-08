@@ -5,18 +5,26 @@ export const getApiUrl = (path: string = ''): string => {
     return path;
   }
 
-  let base = '';
   const envUrl = (import.meta.env.VITE_API_URL || '').trim();
   const storedUrl = typeof localStorage !== 'undefined' ? (localStorage.getItem('chokku_live_api_url') || '').trim() : '';
+  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-  if (envUrl) {
-    base = envUrl;
-  } else if (storedUrl) {
+  let base = '';
+
+  // 1. User manual localStorage override takes highest priority
+  if (storedUrl) {
     base = storedUrl;
-  } else if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    // Production live website fallback to origin /api
+  } 
+  // 2. Environment variable (use envUrl if valid and not localhost when running on live site)
+  else if (envUrl && (!envUrl.includes('localhost') || isLocalhost)) {
+    base = envUrl;
+  } 
+  // 3. If running on live website but envUrl is localhost or missing: fallback to live origin /api
+  else if (typeof window !== 'undefined' && !isLocalhost) {
     base = `${window.location.origin}/api`;
-  } else {
+  } 
+  // 4. Local dev machine fallback
+  else {
     base = 'http://localhost:5000/api';
   }
 
@@ -48,6 +56,21 @@ export const getApiUrl = (path: string = ''): string => {
   }
 
   return `${base}${cleanPath}`;
+};
+
+export const setLiveApiUrl = (url: string) => {
+  if (typeof localStorage !== 'undefined') {
+    const trimmed = url.trim();
+    if (trimmed) {
+      localStorage.setItem('chokku_live_api_url', trimmed);
+    } else {
+      localStorage.removeItem('chokku_live_api_url');
+    }
+  }
+};
+
+export const getLiveApiUrl = (): string => {
+  return typeof localStorage !== 'undefined' ? (localStorage.getItem('chokku_live_api_url') || '') : '';
 };
 
 export interface SafeApiResponse<T = any> {
