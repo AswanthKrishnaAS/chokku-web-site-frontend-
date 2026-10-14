@@ -128,10 +128,16 @@ export const Orders: React.FC = () => {
                         className={`inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border ${
                           order.paymentStatus === 'paid'
                             ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                            : order.paymentStatus === 'cod'
+                            ? 'bg-amber-100 text-amber-800 border-amber-300'
                             : 'bg-amber-100 text-amber-800 border-amber-300'
                         }`}
                       >
-                        {order.paymentStatus === 'paid' ? '● PAID' : '● ' + (order.paymentStatus?.toUpperCase() || 'PAYMENT')}
+                        {order.paymentStatus === 'paid'
+                          ? '● PAID'
+                          : order.paymentStatus === 'cod'
+                          ? '● CASH ON DELIVERY'
+                          : '● ' + (order.paymentStatus?.toUpperCase() || 'PAYMENT')}
                       </span>
                     </div>
 
