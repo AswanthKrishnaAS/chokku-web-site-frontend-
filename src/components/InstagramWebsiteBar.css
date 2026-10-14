@@ -1,0 +1,386 @@
+/* ==========================================================================
+   Instagram-Style Website Link Bar Styles
+   ========================================================================== */
+
+/* Keyframe Animations */
+@keyframes igBarSlideUp {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(-2px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes igChevronBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3.5px);
+  }
+}
+
+@keyframes igSwipeUpExit {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-32px);
+    opacity: 0;
+  }
+}
+
+@keyframes igPillFadeIn {
+  from {
+    transform: translateY(18px) scale(0.92);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes igPulseGlow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 1;
+  }
+}
+
+/* Outer Fixed Wrapper */
+.ig-website-bar-wrapper {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 45;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  pointer-events: none; /* Let clicks on sides pass through */
+  transition: bottom 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s ease-out;
+  padding: 0 16px;
+}
+
+/* On mobile with active BottomNav, raise safely above BottomNav (including elevated central button) */
+@media (max-width: 1023px) {
+  .ig-website-bar-wrapper.has-bottom-nav {
+    bottom: 65px;
+    padding: 0 10px;
+  }
+}
+
+/* Smooth swipe-up animation on interaction */
+.ig-website-bar-wrapper.is-swiping .ig-website-bar-card {
+  animation: igSwipeUpExit 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Main Bar Card */
+.ig-website-bar-card {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 460px;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: none;
+  box-shadow: 0 -4px 22px -2px rgba(0, 0, 0, 0.08), 0 -1px 3px rgba(0, 0, 0, 0.03);
+  animation: igBarSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  user-select: none;
+  cursor: pointer;
+}
+
+/* On mobile when floating above BottomNav, soften bottom corners slightly for card finish */
+@media (max-width: 1023px) {
+  .ig-website-bar-wrapper.has-bottom-nav .ig-website-bar-card {
+    border-bottom-left-radius: 14px;
+    border-bottom-right-radius: 14px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.1), 0 -4px 18px -2px rgba(0, 0, 0, 0.06);
+  }
+}
+
+.ig-website-bar-card:hover {
+  background: #ffffff;
+  box-shadow: 0 -6px 24px -2px rgba(0, 0, 0, 0.12), 0 -2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.ig-website-bar-card:active {
+  transform: scale(0.995);
+}
+
+/* Drag Handle / Indicator at Top */
+.ig-drag-handle-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 0 4px 0;
+  cursor: grab;
+}
+
+.ig-drag-handle {
+  width: 36px;
+  height: 4px;
+  background-color: #d1d5db;
+  border-radius: 9999px;
+  transition: background-color 0.2s ease, width 0.2s ease;
+}
+
+.ig-website-bar-card:hover .ig-drag-handle {
+  background-color: #9ca3af;
+  width: 42px;
+}
+
+/* Inner Content Row */
+.ig-bar-content {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 2px 14px 10px 14px;
+}
+
+/* Website / Globe Icon Badge */
+.ig-icon-badge {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.ig-icon-inner {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #f3f4f6;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.ig-website-bar-card:hover .ig-icon-inner {
+  transform: scale(1.04);
+  background: #e5e7eb;
+}
+
+.ig-status-dot {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background-color: #22c55e;
+  border: 1.5px solid #ffffff;
+  animation: igPulseGlow 2.5s infinite ease-in-out;
+}
+
+/* Information Column (URL and subtext) */
+.ig-info-col {
+  flex: 1;
+  min-width: 0; /* Ensures proper text truncation */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.ig-url-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ig-url-text {
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #111827;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  line-height: 1.25;
+}
+
+.ig-website-bar-card:hover .ig-url-text {
+  color: #000000;
+}
+
+.ig-verified-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.ig-subtext-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 500;
+  margin-top: 1px;
+  line-height: 1.1;
+}
+
+.ig-subtext {
+  color: #6b7280;
+}
+
+.ig-bullet {
+  color: #9ca3af;
+  font-size: 9px;
+}
+
+.ig-action-hint {
+  color: #488710;
+  font-weight: 600;
+}
+
+/* Action Group (Visit Button and Close Button) */
+.ig-action-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ig-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: #111827;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px 6px 13px;
+  border-radius: 9999px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.ig-open-btn:hover {
+  background-color: #000000;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+}
+
+.ig-open-text {
+  letter-spacing: 0.01em;
+}
+
+.ig-arrow-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ig-upward-chevron {
+  animation: igChevronBounce 1.8s ease-in-out infinite;
+  stroke: #ffffff;
+}
+
+.ig-website-bar-card:hover .ig-upward-chevron {
+  animation-duration: 1s;
+}
+
+.ig-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: transparent;
+  color: #9ca3af;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.ig-close-btn:hover {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+/* ==========================================================================
+   Minimized Pill State
+   ========================================================================== */
+.ig-minimized-wrapper {
+  position: fixed;
+  bottom: 14px;
+  right: 16px;
+  z-index: 45;
+  transition: bottom 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: igPillFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (max-width: 1023px) {
+  .ig-minimized-wrapper.has-bottom-nav {
+    bottom: 72px;
+    right: 12px;
+  }
+}
+
+.ig-minimized-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  padding: 5px 11px 5px 6px;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ig-minimized-pill:hover {
+  transform: translateY(-2px);
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+}
+
+.ig-minimized-icon-box {
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ig-minimized-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #374151;
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

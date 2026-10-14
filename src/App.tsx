@@ -13,6 +13,7 @@ import { GameSettingsProvider } from './context/GameSettingsContext';
 
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
+import { InstagramWebsiteBar } from './components/InstagramWebsiteBar';
 
 import { Footer } from './components/Footer';
 import { ToastContainer } from './components/Toast';
@@ -56,9 +57,12 @@ const AppLayout: React.FC = () => {
   
   // Hide Navbar & Footer on Admin pages or when server is disconnected
   const hideHeaderFooter = pathname.startsWith('/admin') || !isServerConnected;
+  const isCheckout = pathname === '/checkout';
+  const hideFooter = hideHeaderFooter || isCheckout;
+  const hideBottomNav = hideHeaderFooter || isCheckout;
 
   return (
-    <div className="min-h-screen flex flex-col bg-white text-gray-900 font-sans antialiased pb-16 lg:pb-0">
+    <div className={`min-h-screen flex flex-col bg-white text-gray-900 font-sans antialiased ${isCheckout ? 'pb-0' : 'pb-16 lg:pb-0'}`}>
       {!hideHeaderFooter && <Navbar />}
       <main className="flex-1">
         <Routes>
@@ -121,8 +125,9 @@ const AppLayout: React.FC = () => {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
-      {!hideHeaderFooter && <Footer />}
-      {!hideHeaderFooter && <BottomNav />}
+      {!hideFooter && <Footer />}
+      {!hideBottomNav && <BottomNav />}
+      <InstagramWebsiteBar hasBottomNav={!hideBottomNav} />
       <ToastContainer />
     </div>
   );

@@ -61,22 +61,32 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [couponCode]);
 
   const addToCart = (product: Product, quantity = 1, color?: string, size?: string) => {
+    let isExisting = false;
+    let newQty = quantity;
+
     setCartItems((prev) => {
       const existingIndex = prev.findIndex((item) => item.product.id === product.id);
       if (existingIndex > -1) {
+        isExisting = true;
         const updated = [...prev];
-        const newQty = updated[existingIndex].quantity + quantity;
+        newQty = updated[existingIndex].quantity + quantity;
         updated[existingIndex] = {
           ...updated[existingIndex],
           quantity: newQty,
         };
-        addToast('Updated Cart', `Increased ${product.name} quantity to ${newQty}.`, 'success');
         return updated;
       } else {
-        addToast('Added to Cart', `${product.name} has been added to your shopping cart.`, 'success');
+        isExisting = false;
         return [...prev, { product, quantity, selectedColor: color, selectedSize: size }];
       }
     });
+
+    // Run side-effect OUTSIDE the state updater to prevent duplicate triggers in React StrictMode/concurrent renders
+    if (isExisting) {
+      addToast('Updated Cart', `Increased ${product.name} quantity to ${newQty}.`, 'success');
+    } else {
+      addToast('Added to Cart', `${product.name} has been added to your shopping cart.`, 'success');
+    }
   };
 
   const removeFromCart = (productId: string) => {

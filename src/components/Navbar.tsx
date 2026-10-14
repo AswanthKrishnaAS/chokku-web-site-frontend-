@@ -143,6 +143,119 @@ export const Navbar: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-2xs w-full transition-all">
+      {/* ===== TOP MARQUEE CONTAINER ("Special Welcome Order" / "spacal welocom order") ===== */}
+      <div
+        className="w-full bg-gradient-to-r from-[#1c3804] via-[#386b0c] to-[#1c3804] text-white py-1.5 px-3 overflow-hidden shadow-xs border-b border-[#2d5509]/60 relative z-20 group select-none"
+        data-marquee="spacal welocom order"
+        data-testid="navbar-marquee-spacal-welocom-order"
+        role="region"
+        aria-label="Special Welcome Order Announcements"
+      >
+        <Link
+          to="/shop?tag=offers"
+          className="flex overflow-hidden items-center justify-start cursor-pointer transition-opacity hover:opacity-95"
+          title="Special Welcome Order - Click to explore exclusive offers"
+        >
+          <div className="animate-marquee-scroll flex items-center shrink-0">
+            {/* Half 1 */}
+            <div className="flex items-center gap-6 sm:gap-10 shrink-0 pr-6 sm:pr-10">
+              <div className="inline-flex items-center gap-2 text-[11px] sm:text-xs font-bold text-white tracking-wide">
+                <span className="flex items-center justify-center w-4.5 h-4.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-300/30">
+                  <Sparkles className="w-3 h-3 text-amber-300 animate-pulse" />
+                </span>
+                <span className="font-black uppercase tracking-wider text-amber-200 bg-black/25 px-2 py-0.5 rounded-full border border-amber-400/30 shadow-2xs text-[10px] sm:text-[11px]">
+                  Special Welcome Order
+                </span>
+                <span className="text-white font-medium">
+                  Flat 20% OFF on your welcome order! Use code: <span className="font-extrabold text-amber-300 underline underline-offset-2">WELCOME20</span>
+                </span>
+                <span className="sr-only">spacal welocom order</span>
+              </div>
+
+              <span className="text-emerald-300/40 text-sm font-bold">•</span>
+
+              <div className="inline-flex items-center gap-2 text-[11px] sm:text-xs font-bold text-white tracking-wide">
+                <span className="flex items-center justify-center w-4.5 h-4.5 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-300/30">
+                  <Gift className="w-3 h-3 text-amber-300" />
+                </span>
+                <span className="font-black uppercase tracking-wider text-amber-200 bg-black/25 px-2 py-0.5 rounded-full border border-amber-400/30 shadow-2xs text-[10px] sm:text-[11px]">
+                  Special Welcome Order
+                </span>
+                <span className="text-white font-medium">
+                 Free Express Delivery + Surprise Gift on all first orders!
+                </span>
+                <span className="sr-only">spacal welocom order</span>
+              </div>
+
+              <span className="text-emerald-300/40 text-sm font-bold">•</span>
+
+              <div className="inline-flex items-center gap-2 text-[11px] sm:text-xs font-bold text-white tracking-wide">
+                {/* <span className="flex items-center justify-center w-4.5 h-4.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-300/30">
+                  <Coins className="w-3 h-3 text-amber-300" />
+                </span> */}
+                <span className="font-black uppercase tracking-wider text-amber-200 bg-black/25 px-2 py-0.5 rounded-full border border-amber-400/30 shadow-2xs text-[10px] sm:text-[11px]">
+                  Special Welcome Order
+                </span>
+                <span className="text-white font-medium">
+                  🪙 100 Bonus Game Coins credited to your wallet instantly upon signup!
+                </span>
+                <span className="sr-only">spacal welocom order</span>
+              </div>
+
+              <span className="text-emerald-300/40 text-sm font-bold">•</span>
+            </div>
+
+            {/* Half 2 (Exact duplicate for seamless infinite loop) */}
+            <div className="flex items-center gap-6 sm:gap-10 shrink-0 pr-6 sm:pr-10" aria-hidden="true">
+              <div className="inline-flex items-center gap-2 text-[11px] sm:text-xs font-bold text-white tracking-wide">
+                <span className="flex items-center justify-center w-4.5 h-4.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-300/30">
+                  <Sparkles className="w-3 h-3 text-amber-300 animate-pulse" />
+                </span>
+                <span className="font-black uppercase tracking-wider text-amber-200 bg-black/25 px-2 py-0.5 rounded-full border border-amber-400/30 shadow-2xs text-[10px] sm:text-[11px]">
+                  Special Welcome Order
+                </span>
+                <span className="text-white font-medium">
+                  Flat 20% OFF on your welcome order! Use code: <span className="font-extrabold text-amber-300 underline underline-offset-2">WELCOME20</span>
+                </span>
+                <span className="sr-only">spacal welocom order</span>
+              </div>
+
+              <span className="text-emerald-300/40 text-sm font-bold">•</span>
+
+              <div className="inline-flex items-center gap-2 text-[11px] sm:text-xs font-bold text-white tracking-wide">
+                <span className="flex items-center justify-center w-4.5 h-4.5 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-300/30">
+                  <Gift className="w-3 h-3 text-amber-300" />
+                </span>
+                <span className="font-black uppercase tracking-wider text-amber-200 bg-black/25 px-2 py-0.5 rounded-full border border-amber-400/30 shadow-2xs text-[10px] sm:text-[11px]">
+                  Special Welcome Order
+                </span>
+                <span className="text-white font-medium">
+                   Free Express Delivery + Surprise Gift on all first orders!
+                </span>
+                <span className="sr-only">spacal welocom order</span>
+              </div>
+
+              <span className="text-emerald-300/40 text-sm font-bold">•</span>
+
+              <div className="inline-flex items-center gap-2 text-[11px] sm:text-xs font-bold text-white tracking-wide">
+                <span className="flex items-center justify-center w-4.5 h-4.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-300/30">
+                  <Coins className="w-3 h-3 text-amber-300" />
+                </span>
+                <span className="font-black uppercase tracking-wider text-amber-200 bg-black/25 px-2 py-0.5 rounded-full border border-amber-400/30 shadow-2xs text-[10px] sm:text-[11px]">
+                  Special Welcome Order
+                </span>
+                <span className="text-white font-medium">
+                  🪙 100 Bonus Game Coins credited to your wallet instantly upon signup!
+                </span>
+                <span className="sr-only">spacal welocom order</span>
+              </div>
+
+              <span className="text-emerald-300/40 text-sm font-bold">•</span>
+            </div>
+          </div>
+        </Link>
+      </div>
+
       {/* ===== MOBILE HEADER (lg:hidden) matching Image 2 ===== */}
       <div className="lg:hidden w-full px-3 py-2 space-y-2">
         {/* Top Row: Logo | Search Input | Bell | Cart */}
