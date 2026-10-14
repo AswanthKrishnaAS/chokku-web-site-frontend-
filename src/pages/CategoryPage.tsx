@@ -2,21 +2,35 @@ import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { CATEGORIES } from '../data/categories';
 import { PRODUCTS } from '../data/products';
+import { useCategories } from '../context/CategoryContext';
+import { useProducts } from '../context/ProductContext';
 import { ProductCard } from '../components/ProductCard';
-import { ArrowLeft, Tag, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, Tag, SlidersHorizontal, Loader2 } from 'lucide-react';
 import { TreasureCoin } from '../components/TreasureCoin';
 
 export const CategoryPage: React.FC = () => {
   const { category: categorySlug } = useParams<{ category: string }>();
   const [sortBy, setSortBy] = useState<'popular' | 'price-asc' | 'price-desc'>('popular');
+  const { categories, isLoading: isCategoriesLoading } = useCategories();
+  const { products: storeProducts, isLoading: isProductsLoading } = useProducts();
 
-  const currentCategory = CATEGORIES.find((c) => c.slug === categorySlug);
+  const currentCategory = categories.find((c) => c.slug === categorySlug) || CATEGORIES.find((c) => c.slug === categorySlug);
 
-  const categoryProducts = PRODUCTS.filter((p) => p.category === categorySlug).sort((a, b) => {
+  const allProducts = storeProducts.length > 0 ? storeProducts : PRODUCTS;
+  const categoryProducts = allProducts.filter((p) => p.category === categorySlug).sort((a, b) => {
     if (sortBy === 'price-asc') return a.price - b.price;
     if (sortBy === 'price-desc') return b.price - a.price;
     return b.rating - a.rating;
   });
+
+  if (isCategoriesLoading && !currentCategory) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-24 text-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#488710] mx-auto mb-3" />
+        <p className="text-gray-500 text-sm font-medium">Loading category products...</p>
+      </div>
+    );
+  }
 
   if (!currentCategory) {
     return (

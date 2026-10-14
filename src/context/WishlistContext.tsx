@@ -31,9 +31,22 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [wishlistIds]);
 
-  const toggleWishlist = (productId: string) => {
-    const product = PRODUCTS.find((p) => p.id === productId);
-    const productName = product ? product.name : 'Product';
+  const toggleWishlist = (productId: string, nameOverride?: string) => {
+    let productName = nameOverride;
+    if (!productName) {
+      try {
+        const saved = localStorage.getItem('chokku_products_v2');
+        if (saved) {
+          const prods = JSON.parse(saved);
+          const found = prods.find((p: any) => p.id === productId);
+          if (found) productName = found.name;
+        }
+      } catch {}
+    }
+    if (!productName) {
+      const product = PRODUCTS.find((p) => p.id === productId);
+      productName = product ? product.name : 'Product';
+    }
 
     setWishlistIds((prev) => {
       if (prev.includes(productId)) {

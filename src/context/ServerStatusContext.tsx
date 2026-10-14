@@ -17,8 +17,8 @@ export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const checkServerConnection = useCallback(async (): Promise<boolean> => {
     setIsChecking(true);
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      // Allow sufficient timeout for Render cloud free-tier spin-up
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
 
       const res = await safeFetch('/health', {
         method: 'GET',

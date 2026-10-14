@@ -4,6 +4,8 @@ import { Search, User, ShoppingCart, ChevronDown, Menu, X, Sparkles, Bell, Perce
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useWebsiteSettings } from '../context/WebsiteSettingsContext';
+import { useCategories } from '../context/CategoryContext';
+import { useProducts } from '../context/ProductContext';
 import { CATEGORIES } from '../data/categories';
 import { PRODUCTS } from '../data/products';
 import { Product } from '../types';
@@ -15,6 +17,8 @@ export const Navbar: React.FC = () => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchSuggestions, setSearchSuggestions] = useState<Product[]>([]);
+  const { categories: dynamicCategories } = useCategories();
+  const { products: storeProducts } = useProducts();
 
   const { totalItems } = useCart();
   const { user, isAuthenticated, customerPoints, orders } = useAuth();
@@ -117,6 +121,25 @@ export const Navbar: React.FC = () => {
       navigate(`/shop?search=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
+
+  // Populate search suggestions based on dynamic products
+  useEffect(() => {
+    if (searchQuery.trim().length > 1) {
+      const q = searchQuery.toLowerCase();
+      const allProds = storeProducts.length > 0 ? storeProducts : PRODUCTS;
+      const matches = allProds.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          (p.categoryName && p.categoryName.toLowerCase().includes(q)) ||
+          (p.tags && p.tags.some((t) => t.toLowerCase().includes(q)))
+      ).slice(0, 5);
+      setSearchSuggestions(matches);
+    } else {
+      setSearchSuggestions([]);
+    }
+  }, [searchQuery, storeProducts]);
+
+  const navCategories = dynamicCategories.length > 0 ? dynamicCategories : CATEGORIES;
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-2xs w-full transition-all">
@@ -358,7 +381,7 @@ export const Navbar: React.FC = () => {
                   <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                 </div>
                 <div className="py-1">
-                  {CATEGORIES.map((cat) => (
+                  {navCategories.map((cat) => (
                     <Link
                       key={cat.id}
                       to={`/category/${cat.slug}`}
@@ -367,9 +390,11 @@ export const Navbar: React.FC = () => {
                       <span className="font-semibold group-hover:translate-x-0.5 transition-transform">
                         {cat.name}
                       </span>
-                      <span className="text-xs text-[#488710] bg-[#f0f9e8] px-2.5 py-0.5 rounded-full font-bold">
-                        {cat.itemCount}
-                      </span>
+                      {cat.itemCount !== undefined && (
+                        <span className="text-xs text-[#488710] bg-[#f0f9e8] px-2.5 py-0.5 rounded-full font-bold">
+                          {cat.itemCount}
+                        </span>
+                      )}
                     </Link>
                   ))}
                 </div>

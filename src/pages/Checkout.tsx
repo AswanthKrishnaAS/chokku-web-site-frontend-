@@ -198,8 +198,6 @@ export const Checkout: React.FC = () => {
     }
   };
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
   const [successOrder, setSuccessOrder] = useState<Order | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
 

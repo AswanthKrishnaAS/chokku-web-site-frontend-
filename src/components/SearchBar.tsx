@@ -2,22 +2,25 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, ArrowRight } from 'lucide-react';
 import { PRODUCTS } from '../data/products';
+import { useProducts } from '../context/ProductContext';
 import { Product } from '../types';
 
 export const SearchBar: React.FC<{ className?: string }> = ({ className = '' }) => {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<Product[]>([]);
+  const { products: storeProducts } = useProducts();
   const navigate = useNavigate();
   const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (query.trim().length > 1) {
       const q = query.toLowerCase();
-      const matches = PRODUCTS.filter(
+      const allProducts = storeProducts.length > 0 ? storeProducts : PRODUCTS;
+      const matches = allProducts.filter(
         (p) =>
           p.name.toLowerCase().includes(q) ||
-          p.categoryName.toLowerCase().includes(q) ||
+          (p.categoryName && p.categoryName.toLowerCase().includes(q)) ||
           (p.tags && p.tags.some((t) => t.toLowerCase().includes(q)))
       ).slice(0, 5);
       setSuggestions(matches);
@@ -26,7 +29,7 @@ export const SearchBar: React.FC<{ className?: string }> = ({ className = '' }) 
       setSuggestions([]);
       setIsOpen(false);
     }
-  }, [query]);
+  }, [query, storeProducts]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

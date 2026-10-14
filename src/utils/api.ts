@@ -6,26 +6,13 @@ export const getApiUrl = (path: string = ''): string => {
   }
 
   const envUrl = (import.meta.env.VITE_API_URL || '').trim();
-  const storedUrl = typeof localStorage !== 'undefined' ? (localStorage.getItem('chokku_live_api_url') || '').trim() : '';
-  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const isLocal = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-  let base = '';
-
-  // 1. User manual localStorage override takes highest priority
-  if (storedUrl) {
-    base = storedUrl;
-  } 
-  // 2. Environment variable (use envUrl if valid and not localhost when running on live site)
-  else if (envUrl && (!envUrl.includes('localhost') || isLocalhost)) {
-    base = envUrl;
-  } 
-  // 3. If running on live website but envUrl is localhost or missing: fallback to live origin /api
-  else if (typeof window !== 'undefined' && !isLocalhost) {
-    base = `${window.location.origin}/api`;
-  } 
-  // 4. Local dev machine fallback
-  else {
-    base = 'http://localhost:5000/api';
+  // If VITE_API_URL is set, prioritize it. Otherwise use localhost for local dev, or live Render backend for production.
+  let base = envUrl;
+  if (!base) {
+    base = isLocal ? 'http://localhost:5000/api' : 'https://chokku-web-site-backend.onrender.com/api';
   }
 
   // Strip trailing slashes
@@ -56,21 +43,6 @@ export const getApiUrl = (path: string = ''): string => {
   }
 
   return `${base}${cleanPath}`;
-};
-
-export const setLiveApiUrl = (url: string) => {
-  if (typeof localStorage !== 'undefined') {
-    const trimmed = url.trim();
-    if (trimmed) {
-      localStorage.setItem('chokku_live_api_url', trimmed);
-    } else {
-      localStorage.removeItem('chokku_live_api_url');
-    }
-  }
-};
-
-export const getLiveApiUrl = (): string => {
-  return typeof localStorage !== 'undefined' ? (localStorage.getItem('chokku_live_api_url') || '') : '';
 };
 
 export interface SafeApiResponse<T = any> {
@@ -130,18 +102,13 @@ export const safeFetch = async <T = any>(
       }
     }
 
-    let customErrorMessage = `Server returned non-JSON response (status ${res.status}): ${text.substring(0, 100)}`;
-    if (res.status === 404 && text.includes('<!DOCTYPE html>')) {
-      customErrorMessage = `API endpoint not found (404). Please ensure the backend live service is deployed and VITE_API_URL is configured. Target: ${fullUrl}`;
-    }
-
     return {
       ok: res.ok,
       status: res.status,
       isJson: false,
       data: null,
       text,
-      error: res.ok ? undefined : customErrorMessage,
+      error: res.ok ? undefined : `Server returned non-JSON response (status ${res.status}): ${text.substring(0, 100)}`,
     };
   } catch (netErr: any) {
     return {
