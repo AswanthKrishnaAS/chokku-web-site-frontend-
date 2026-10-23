@@ -5,9 +5,13 @@ import { useToast } from './ToastContext';
 interface CartContextType {
   cartItems: CartItem[];
   addToCart: (product: Product, quantity?: number, color?: string, size?: string) => void;
-  removeFromCart: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
+  removeFromCart: (productId: string, color?: string, size?: string) => void;
+  updateQuantity: (productId: string, quantity: number, color?: string, size?: string) => void;
   clearCart: () => void;
+  buyNowItem: CartItem | null;
+  setBuyNowItem: (item: CartItem | null) => void;
+  updateBuyNowQuantity: (quantity: number) => void;
+  clearBuyNow: () => void;
   couponCode: string;
   isCouponApplied: boolean;
   applyCoupon: (code: string) => boolean;
@@ -23,6 +27,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 const CART_STORAGE_KEY = 'ecoblue_cart_v1';
 const COUPON_STORAGE_KEY = 'ecoblue_coupon_v1';
+const BUY_NOW_STORAGE_KEY = 'chokku_buy_now_item_v1';
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { addToast } = useToast();
@@ -33,6 +38,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
+    }
+  });
+
+  const [buyNowItem, setBuyNowItemState] = useState<CartItem | null>(() => {
+    try {
+      const saved = sessionStorage.getItem(BUY_NOW_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
     }
   });
 
@@ -60,12 +74,50 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [couponCode]);
 
+  const setBuyNowItem = (item: CartItem | null) => {
+    setBuyNowItemState(item);
+    try {
+      if (item) {
+        sessionStorage.setItem(BUY_NOW_STORAGE_KEY, JSON.stringify(item));
+      } else {
+        sessionStorage.removeItem(BUY_NOW_STORAGE_KEY);
+      }
+    } catch (e) {
+      console.error('Failed to update buyNowItem in sessionStorage', e);
+    }
+  };
+
+  const updateBuyNowQuantity = (quantity: number) => {
+    if (quantity <= 0) return;
+    setBuyNowItemState((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, quantity };
+      try {
+        sessionStorage.setItem(BUY_NOW_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const clearBuyNow = () => {
+    setBuyNowItemState(null);
+    try {
+      sessionStorage.removeItem(BUY_NOW_STORAGE_KEY);
+    } catch (e) {}
+  };
+
   const addToCart = (product: Product, quantity = 1, color?: string, size?: string) => {
     let isExisting = false;
     let newQty = quantity;
 
     setCartItems((prev) => {
-      const existingIndex = prev.findIndex((item) => item.product.id === product.id);
+      const existingIndex = prev.findIndex(
+        (item) =>
+          item.product.id === product.id &&
+          (color === undefined || (item.selectedColor || '') === (color || '')) &&
+          (size === undefined || (item.selectedSize || '') === (size || ''))
+      );
+
       if (existingIndex > -1) {
         isExisting = true;
         const updated = [...prev];
@@ -81,29 +133,58 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    // Run side-effect OUTSIDE the state updater to prevent duplicate triggers in React StrictMode/concurrent renders
     if (isExisting) {
-      addToast('Updated Cart', `Increased ${product.name} quantity to ${newQty}.`, 'success');
+      addToast(
+        'Updated Cart',
+        `Increased ${product.name} quantity to ${newQty}.`,
+        'success',
+        { confetti: true, showMascot: true }
+      );
     } else {
-      addToast('Added to Cart', `${product.name} has been added to your shopping cart.`, 'success');
+      addToast(
+        'Added to Cart',
+        `${product.name} added to your shopping cart.`,
+        'success',
+        { confetti: true, showMascot: true }
+      );
     }
   };
 
-  const removeFromCart = (productId: string) => {
-    const target = cartItems.find((i) => i.product.id === productId);
-    setCartItems((prev) => prev.filter((item) => item.product.id !== productId));
-    if (target) {
-      addToast('Removed from Cart', `${target.product.name} removed.`, 'info');
-    }
+  const removeFromCart = (productId: string, color?: string, size?: string) => {
+    setCartItems((prev) => {
+      const target = prev.find(
+        (item) =>
+          item.product.id === productId &&
+          (color === undefined || (item.selectedColor || '') === (color || '')) &&
+          (size === undefined || (item.selectedSize || '') === (size || ''))
+      );
+      if (target) {
+        addToast('Removed from Cart', `${target.product.name} removed.`, 'info');
+      }
+      return prev.filter(
+        (item) =>
+          !(
+            item.product.id === productId &&
+            (color === undefined || (item.selectedColor || '') === (color || '')) &&
+            (size === undefined || (item.selectedSize || '') === (size || ''))
+          )
+      );
+    });
   };
 
-  const updateQuantity = (productId: string, quantity: number) => {
+  const updateQuantity = (productId: string, quantity: number, color?: string, size?: string) => {
     if (quantity <= 0) {
-      removeFromCart(productId);
+      removeFromCart(productId, color, size);
       return;
     }
     setCartItems((prev) =>
-      prev.map((item) => (item.product.id === productId ? { ...item, quantity } : item))
+      prev.map((item) => {
+        const matches =
+          item.product.id === productId &&
+          (color === undefined || (item.selectedColor || '') === (color || '')) &&
+          (size === undefined || (item.selectedSize || '') === (size || ''));
+        return matches ? { ...item, quantity } : item;
+      })
     );
   };
 
@@ -146,7 +227,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deliveryFee = useMemo(() => {
     if (subtotal === 0) return 0;
-    return subtotal > 50 ? 0 : 5.99;
+    return subtotal >= 50 ? 0 : 5.99;
   }, [subtotal]);
 
   const totalAmount = useMemo(() => {
@@ -161,6 +242,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         removeFromCart,
         updateQuantity,
         clearCart,
+        buyNowItem,
+        setBuyNowItem,
+        updateBuyNowQuantity,
+        clearBuyNow,
         couponCode,
         isCouponApplied: Boolean(couponCode),
         applyCoupon,

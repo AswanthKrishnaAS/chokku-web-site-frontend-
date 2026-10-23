@@ -90,7 +90,7 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
               </span>
               <button
                 type="button"
-                onClick={() => removeFromCart(product.id)}
+                onClick={() => removeFromCart(product.id, selectedColor, selectedSize)}
                 className="text-gray-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer"
                 title="Remove item"
               >
@@ -108,7 +108,7 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
               <div className="inline-flex items-center bg-gray-50/90 border border-gray-200/90 rounded-xl p-0.5 shadow-2xs">
                 <button
                   type="button"
-                  onClick={() => updateQuantity(product.id, quantity - 1)}
+                  onClick={() => updateQuantity(product.id, quantity - 1, selectedColor, selectedSize)}
                   className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
                     quantity === 1
                       ? 'text-red-500 hover:bg-red-50 active:scale-95'
@@ -127,7 +127,7 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
                 </span>
                 <button
                   type="button"
-                  onClick={() => updateQuantity(product.id, quantity + 1)}
+                  onClick={() => updateQuantity(product.id, quantity + 1, selectedColor, selectedSize)}
                   className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-200/80 active:scale-95 transition-all cursor-pointer"
                   title="Increase quantity"
                 >
@@ -146,7 +146,7 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
               </div>
               <button
                 type="button"
-                onClick={() => removeFromCart(product.id)}
+                onClick={() => removeFromCart(product.id, selectedColor, selectedSize)}
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 active:scale-95 transition-colors border border-gray-100 cursor-pointer"
                 title="Remove item"
               >

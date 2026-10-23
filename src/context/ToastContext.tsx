@@ -2,17 +2,33 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
+export interface ToastOptions {
+  confetti?: boolean;
+  image?: string;
+  showMascot?: boolean;
+  productName?: string;
+}
+
 export interface ToastMessage {
   id: string;
   type: ToastType;
   title: string;
   description?: string;
+  confetti?: boolean;
+  image?: string;
+  showMascot?: boolean;
+  productName?: string;
   createdAt: number;
 }
 
 interface ToastContextType {
   toasts: ToastMessage[];
-  addToast: (title: string, descriptionOrType?: string, type?: ToastType) => void;
+  addToast: (
+    title: string,
+    descriptionOrType?: string,
+    type?: ToastType,
+    imageOrOptions?: string | ToastOptions | boolean
+  ) => void;
   removeToast: (id: string) => void;
 }
 
@@ -27,7 +43,12 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const addToast = useCallback(
-    (title: string, descriptionOrType?: string, maybeType?: ToastType) => {
+    (
+      title: string,
+      descriptionOrType?: string,
+      maybeType?: ToastType,
+      imageOrOptions?: string | ToastOptions | boolean
+    ) => {
       let description: string | undefined = descriptionOrType;
       let type: ToastType = maybeType || 'success';
 
@@ -38,8 +59,36 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         description = undefined;
       }
 
+      let image: string | undefined;
+      let showMascot = false;
+      let productName: string | undefined;
+      let confetti = false;
+
+      if (imageOrOptions === true) {
+        confetti = true;
+      } else if (typeof imageOrOptions === 'string') {
+        image = imageOrOptions;
+        showMascot = true;
+      } else if (imageOrOptions && typeof imageOrOptions === 'object') {
+        image = imageOrOptions.image;
+        showMascot = imageOrOptions.showMascot !== undefined ? imageOrOptions.showMascot : !!image;
+        productName = imageOrOptions.productName;
+        confetti = !!imageOrOptions.confetti;
+      }
+
+      // Automatically trigger confetti & mascot celebration for cart operations or festive titles
+      if (
+        title.toLowerCase().includes('cart') ||
+        title.includes('🎉') ||
+        title.includes('REWARD') ||
+        title.includes('CONGRATULATIONS')
+      ) {
+        confetti = true;
+        showMascot = true;
+      }
+
       // De-duplicate if the exact same toast was created within the last 800ms
-      const dedupeKey = `${title}_${type}`;
+      const dedupeKey = `${title}_${type}_${confetti ? 'confetti' : ''}`;
       const now = Date.now();
       if (recentToastsRef.current[dedupeKey] && now - recentToastsRef.current[dedupeKey] < 800) {
         return;
@@ -52,6 +101,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         title,
         description,
         type,
+        confetti,
+        image,
+        showMascot,
+        productName,
         createdAt: now,
       };
 
@@ -63,7 +116,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       setTimeout(() => {
         removeToast(id);
-      }, 3500);
+      }, 4200);
     },
     [removeToast]
   );

@@ -13,7 +13,6 @@ import { GameSettingsProvider } from './context/GameSettingsContext';
 
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
-import { InstagramWebsiteBar } from './components/InstagramWebsiteBar';
 
 import { Footer } from './components/Footer';
 import { ToastContainer } from './components/Toast';
@@ -32,6 +31,7 @@ import { Addresses } from './pages/Addresses';
 import { Orders } from './pages/Orders';
 import { PlayAndWin } from './pages/PlayAndWin';
 import { CatchtheGift } from './pages/CatchtheGift';
+import { SpinandWin } from './pages/SpinandWin';
 import { NotFound } from './pages/NotFound';
 import { AdminLogin } from './pages/admindashboard/AdminLogin';
 import { AdminDashboard } from './pages/admindashboard/AdminDashboard';
@@ -81,6 +81,8 @@ const AppLayout: React.FC = () => {
           <Route path="/play-and-win" element={<PlayAndWin />} />
           <Route path="/catch-the-gift" element={<CatchtheGift />} />
           <Route path="/catchthegift" element={<CatchtheGift />} />
+          <Route path="/spin-and-win" element={<SpinandWin />} />
+          <Route path="/spinandwin" element={<SpinandWin />} />
           <Route path="/admin-login" element={<AdminLogin />} />
           <Route
             path="/admin-dashboard"
@@ -127,7 +129,6 @@ const AppLayout: React.FC = () => {
       </main>
       {!hideFooter && <Footer />}
       {!hideBottomNav && <BottomNav />}
-      <InstagramWebsiteBar hasBottomNav={!hideBottomNav} />
       <ToastContainer />
     </div>
   );
