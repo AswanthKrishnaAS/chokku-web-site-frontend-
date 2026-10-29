@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Gamepad2,
@@ -18,6 +18,7 @@ import {
   ShoppingBag
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import playbgm from '../assets/img/playbgm.png';
 import playmobile from '../assets/img/playmobile.png';
 import gameboy from '../assets/img/gameboy.png';
@@ -37,7 +38,17 @@ interface CouponItem {
 
 export const PlayAndWin: React.FC = () => {
   const { addToast } = useToast();
+  const { customerUser } = useAuth();
+  const navigate = useNavigate();
   const [activeGameModal, setActiveGameModal] = useState<'coupons' | null>(null);
+
+  const handleGameLaunch = (e: React.MouseEvent, path: string, gameTitle: string) => {
+    if (!customerUser) {
+      e.preventDefault();
+      addToast('Login Required', `Please login to access ${gameTitle} and save your rewards!`, 'warning');
+      navigate('/login', { state: { returnUrl: path, from: path } });
+    }
+  };
 
   // Saved coupons state
   const [myCoupons, setMyCoupons] = useState<CouponItem[]>([
@@ -210,7 +221,10 @@ export const PlayAndWin: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
 
           {/* CARD 1: Catch the Gift */}
-          <div className="bg-white rounded-3xl border border-gray-100 hover:border-emerald-200 p-4 sm:p-5 shadow-2xs hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group cursor-pointer active:scale-98">
+          <div
+            onClick={(e) => handleGameLaunch(e, '/catch-the-gift', 'Catch the Gift')}
+            className="bg-white rounded-3xl border border-gray-100 hover:border-emerald-200 p-4 sm:p-5 shadow-2xs hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group cursor-pointer active:scale-98"
+          >
             <div className="w-full h-44 sm:h-52 rounded-2xl bg-gradient-to-br from-[#ebf7de] via-[#f4faee] to-[#dcf0c5] flex items-center justify-center relative border border-emerald-200/80 p-3 overflow-hidden shadow-inner">
               <div className="absolute inset-0 bg-[radial-gradient(#488710_1px,transparent_1px)] [background-size:14px_14px] opacity-15 pointer-events-none" />
               <div className="w-32 h-32 rounded-full bg-white/70 blur-xl absolute pointer-events-none" />
@@ -230,6 +244,7 @@ export const PlayAndWin: React.FC = () => {
 
             <Link
               to="/catch-the-gift"
+              onClick={(e) => handleGameLaunch(e, '/catch-the-gift', 'Catch the Gift')}
               className="w-full bg-[#f0f9e8] hover:bg-[#488710] text-[#386b0c] hover:text-white font-extrabold rounded-full py-2.5 px-4 text-xs flex items-center justify-between border border-[#d2ea9d] transition-all shadow-2xs active:scale-95"
             >
               <span>Play Now</span>
@@ -240,7 +255,10 @@ export const PlayAndWin: React.FC = () => {
           </div>
 
           {/* CARD 2: Lucky Spin Wheel */}
-          <div className="bg-white rounded-3xl border border-gray-100 hover:border-sky-200 p-4 sm:p-5 shadow-2xs hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group cursor-pointer active:scale-98">
+          <div
+            onClick={(e) => handleGameLaunch(e, '/spin-and-win', 'Spin and Win')}
+            className="bg-white rounded-3xl border border-gray-100 hover:border-sky-200 p-4 sm:p-5 shadow-2xs hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group cursor-pointer active:scale-98"
+          >
             <div className="w-full h-44 sm:h-52 rounded-2xl bg-gradient-to-br from-[#ebf5fe] via-[#f3f9ff] to-[#d8ecfc] flex items-center justify-center relative border border-sky-200/80 p-3 overflow-hidden shadow-inner">
               <div className="absolute inset-0 bg-[radial-gradient(#0284c7_1px,transparent_1px)] [background-size:14px_14px] opacity-15 pointer-events-none" />
               <div className="w-32 h-32 rounded-full bg-white/70 blur-xl absolute pointer-events-none" />
@@ -260,9 +278,10 @@ export const PlayAndWin: React.FC = () => {
 
             <Link
               to="/spin-and-win"
+              onClick={(e) => handleGameLaunch(e, '/spin-and-win', 'Spin and Win')}
               className="w-full bg-sky-50 hover:bg-sky-500 text-sky-700 hover:text-white font-extrabold rounded-full py-2.5 px-4 text-xs flex items-center justify-between border border-sky-100 transition-all cursor-pointer shadow-2xs active:scale-95"
             >
-              <span>Spin Now</span>
+              <span>Play Now</span>
               <div className="w-6 h-6 rounded-full bg-sky-500 text-white flex items-center justify-center group-hover:bg-white group-hover:text-sky-500 transition-colors">
                 <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
               </div>

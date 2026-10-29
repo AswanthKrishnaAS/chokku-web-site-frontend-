@@ -19,6 +19,8 @@ interface AuthContextType {
   adminUser: User | null;
   customerPoints: number;
   fetchCustomerPoints: () => Promise<number>;
+  customerWalletBalance: number;
+  fetchCustomerWalletBalance: () => Promise<number>;
   savedAddresses: SavedAddress[];
   isAddressesLoading: boolean;
   fetchSavedAddresses: () => Promise<SavedAddress[]>;
@@ -40,6 +42,13 @@ interface AuthContextType {
   fetchMyOrders: () => Promise<void>;
   addOrder: (order: Order) => void;
   updateOrderStatus: (orderId: string, status: Order['status']) => void;
+  welcomeModal: {
+    isOpen: boolean;
+    name: string;
+    isSignUp: boolean;
+  };
+  showWelcomeModal: (name: string, isSignUp?: boolean) => void;
+  closeWelcomeModal: () => void;
 }
 
 const getCustomerOrdersKey = (user: User | null): string => {
@@ -86,7 +95,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [orders, setOrders] = useState<Order[]>([]);
   const [isOrdersLoading, setIsOrdersLoading] = useState<boolean>(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
+
+  // Welcome Modal state for customer sign in / sign up
+  const [welcomeModal, setWelcomeModal] = useState<{
+    isOpen: boolean;
+    name: string;
+    isSignUp: boolean;
+  }>({
+    isOpen: false,
+    name: '',
+    isSignUp: false,
+  });
+
+  const showWelcomeModal = (name: string, isSignUp: boolean = false) => {
+    setWelcomeModal({
+      isOpen: true,
+      name,
+      isSignUp,
+    });
+  };
+
+  const closeWelcomeModal = () => {
+    setWelcomeModal((prev) => ({ ...prev, isOpen: false }));
+  };
   const [customerPoints, setCustomerPoints] = useState<number>(0);
+  const [customerWalletBalance, setCustomerWalletBalance] = useState<number>(() => {
+    try {
+      return (customerUser as any)?.walletBalance || 0;
+    } catch {
+      return 0;
+    }
+  });
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [isAddressesLoading, setIsAddressesLoading] = useState<boolean>(false);
 
@@ -254,10 +293,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Fetch Total Customer Points from Backend API
+  // Fetch Total Customer Points and Wallet Balance from Backend API
   const fetchCustomerPoints = async (): Promise<number> => {
     if (!customerUser) {
       setCustomerPoints(0);
+      setCustomerWalletBalance(0);
       return 0;
     }
     try {
@@ -271,9 +311,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
       });
 
-      if (res.ok && res.isJson && res.data?.success && typeof res.data?.totalPoints === 'number') {
-        setCustomerPoints(res.data.totalPoints);
-        return res.data.totalPoints;
+      if (res.ok && res.isJson && res.data?.success) {
+        if (typeof res.data?.totalPoints === 'number') {
+          setCustomerPoints(res.data.totalPoints);
+        }
+        if (typeof res.data?.walletBalance === 'number') {
+          setCustomerWalletBalance(res.data.walletBalance);
+        }
+        return res.data.totalPoints || 0;
       }
     } catch (err) {
       console.warn('Failed fetching customer points from backend:', err);
@@ -281,13 +326,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return 0;
   };
 
-  // Sync customer points and saved addresses automatically whenever customerUser logs in or changes
+  const fetchCustomerWalletBalance = async (): Promise<number> => {
+    if (!customerUser) {
+      setCustomerWalletBalance(0);
+      return 0;
+    }
+    await fetchCustomerPoints();
+    return customerWalletBalance;
+  };
+
+  // Sync customer points, wallet balance and saved addresses automatically whenever customerUser logs in or changes
   useEffect(() => {
     if (customerUser) {
       fetchCustomerPoints();
       fetchSavedAddresses();
     } else {
       setCustomerPoints(0);
+      setCustomerWalletBalance(0);
       setSavedAddresses([]);
     }
   }, [customerUser]);
@@ -531,6 +586,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (res.data.user) {
           setCustomerUser(res.data.user);
         }
+        showWelcomeModal(res.data.user?.name || username, false);
         addToast('Welcome Back!', `Logged in successfully as ${res.data.user?.name || username}`, 'success');
         return true;
       } else {
@@ -554,6 +610,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: 'customer',
         };
         setCustomerUser(demoUser);
+        showWelcomeModal(username, false);
         addToast('Welcome Back!', `Logged in as ${username}`, 'success');
         return true;
       }
@@ -647,6 +704,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             status: 'Active',
           });
         }
+        showWelcomeModal(res.data.user?.name || data.name, true);
         addToast('Account Created!', `Welcome to Chokku Store, ${res.data.user?.name || data.name}!`, 'success');
         return true;
       } else {
@@ -671,6 +729,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         date: new Date().toISOString().split('T')[0],
         status: 'Active',
       });
+      showWelcomeModal(data.name, true);
       addToast('Account Created!', `Welcome, ${data.name}! Registered successfully.`, 'success');
       return true;
     }
@@ -775,6 +834,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         adminUser,
         customerPoints,
         fetchCustomerPoints,
+        customerWalletBalance,
+        fetchCustomerWalletBalance,
         savedAddresses,
         isAddressesLoading,
         fetchSavedAddresses,
@@ -802,6 +863,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fetchMyOrders,
         addOrder,
         updateOrderStatus,
+        welcomeModal,
+        showWelcomeModal,
+        closeWelcomeModal,
       }}
     >
       {children}

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Filter as FilterIcon, X, RotateCcw, Star } from 'lucide-react';
-import { CATEGORIES } from '../data/categories';
+import { useCategories } from '../context/CategoryContext';
+import { useProducts } from '../context/ProductContext';
 
 export interface FilterState {
   category: string;
@@ -26,6 +27,28 @@ export const Filter: React.FC<FilterProps> = ({
   isOpenMobile = false,
   onCloseMobile,
 }) => {
+  const { categories } = useCategories();
+  const { products } = useProducts();
+
+  const maxCatalogPrice = useMemo(() => {
+    if (products.length === 0) return 5000;
+    const maxVal = Math.max(...products.map((p) => p.price || 0));
+    return Math.max(1000, Math.ceil(maxVal / 500) * 500);
+  }, [products]);
+
+  const getCategoryCount = (catSlug: string) => {
+    const target = categories.find((c) => c.slug === catSlug || c.id === catSlug);
+    return products.filter((p) =>
+      p.category === catSlug ||
+      (p.categoryName || '').toLowerCase() === catSlug.toLowerCase() ||
+      (target && (
+        p.category === target.slug ||
+        p.category === target.id ||
+        (p.categoryName || '').toLowerCase() === target.name.toLowerCase()
+      ))
+    ).length;
+  };
+
   const handleCategoryChange = (slug: string) => {
     setFilters((prev) => ({ ...prev, category: slug }));
   };
@@ -41,7 +64,7 @@ export const Filter: React.FC<FilterProps> = ({
 
         <button
           onClick={resetFilters}
-          className="text-xs font-semibold text-brand-green hover:underline inline-flex items-center gap-1"
+          className="text-xs font-semibold text-brand-green hover:underline inline-flex items-center gap-1 cursor-pointer"
         >
           <RotateCcw className="w-3 h-3" />
           <span>Reset All</span>
@@ -54,19 +77,22 @@ export const Filter: React.FC<FilterProps> = ({
         <div className="space-y-2">
           <button
             onClick={() => handleCategoryChange('all')}
-            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-between cursor-pointer ${
               filters.category === 'all'
                 ? 'bg-brand-light-green text-brand-green border-l-4 border-brand-green'
                 : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
-            All Products
+            <span>All Products</span>
+            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+              {products.length}
+            </span>
           </button>
-          {CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <button
-              key={cat.id}
+              key={cat.id || cat.slug}
               onClick={() => handleCategoryChange(cat.slug)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-between ${
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-between cursor-pointer ${
                 filters.category === cat.slug
                   ? 'bg-brand-light-green text-brand-green border-l-4 border-brand-green'
                   : 'text-gray-600 hover:bg-gray-50'
@@ -74,7 +100,7 @@ export const Filter: React.FC<FilterProps> = ({
             >
               <span>{cat.name}</span>
               <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                {cat.itemCount}
+                {getCategoryCount(cat.slug)}
               </span>
             </button>
           ))}
@@ -92,9 +118,9 @@ export const Filter: React.FC<FilterProps> = ({
         <input
           type="range"
           min="0"
-          max="300"
-          step="10"
-          value={filters.maxPrice}
+          max={maxCatalogPrice}
+          step="50"
+          value={Math.min(filters.maxPrice, maxCatalogPrice)}
           onChange={(e) =>
             setFilters((prev) => ({ ...prev, maxPrice: Number(e.target.value) }))
           }
@@ -102,7 +128,7 @@ export const Filter: React.FC<FilterProps> = ({
         />
         <div className="flex justify-between text-xs text-gray-400 mt-1">
           <span>₹0</span>
-          <span>₹300</span>
+          <span>₹{maxCatalogPrice}</span>
         </div>
       </div>
 

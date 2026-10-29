@@ -64,8 +64,12 @@ export interface Product {
   isFeatured?: boolean;
   isNewArrival?: boolean;
   isBestSeller?: boolean;
+  salesCount?: number;
+  createdAt?: string;
   discountTag?: string;
   tags?: string[];
+  isCodAvailable?: boolean;
+  isOnlinePaymentAvailable?: boolean;
   tryOn?: boolean;
   tryOnEnabled?: boolean;
   tryOnImages?: string[];
@@ -123,6 +127,7 @@ export interface Order {
   items: CartItem[];
   subtotal: number;
   discount: number;
+  storeCashApplied?: number;
   deliveryFee: number;
   totalAmount: number;
   status: 'Pending' | 'Processing' | 'Confirmed' | 'Shipped' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
@@ -165,4 +170,5 @@ export interface User {
   pincode?: string;
   avatarUrl?: string;
   role?: 'customer' | 'user' | 'admin';
+  walletBalance?: number;
 }

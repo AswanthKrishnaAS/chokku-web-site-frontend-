@@ -17,7 +17,21 @@ export const CategoryPage: React.FC = () => {
   const currentCategory = categories.find((c) => c.slug === categorySlug) || CATEGORIES.find((c) => c.slug === categorySlug);
 
   const allProducts = storeProducts.length > 0 ? storeProducts : PRODUCTS;
-  const categoryProducts = allProducts.filter((p) => p.category === categorySlug).sort((a, b) => {
+  const categoryProducts = allProducts.filter((p) => {
+    if (!categorySlug) return true;
+    const slugLower = categorySlug.toLowerCase();
+    const pCatLower = (p.category || '').toLowerCase();
+    const pCatNameLower = (p.categoryName || '').toLowerCase();
+    const currentNameLower = (currentCategory?.name || '').toLowerCase();
+    const currentIdLower = (currentCategory?.id || '').toLowerCase();
+    return (
+      pCatLower === slugLower ||
+      pCatLower === currentIdLower ||
+      pCatNameLower === currentNameLower ||
+      pCatNameLower === slugLower ||
+      pCatLower === currentNameLower
+    );
+  }).sort((a, b) => {
     if (sortBy === 'price-asc') return a.price - b.price;
     if (sortBy === 'price-desc') return b.price - a.price;
     return b.rating - a.rating;

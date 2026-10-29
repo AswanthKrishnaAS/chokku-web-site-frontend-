@@ -7,15 +7,17 @@ import { WishlistProvider } from './context/WishlistContext';
 import { CartProvider } from './context/CartContext';
 import { WebsiteSettingsProvider } from './context/WebsiteSettingsContext';
 import { CategoryProvider } from './context/CategoryContext';
-import { ProductProvider } from './context/ProductContext';
+import { ProductProvider, useProducts } from './context/ProductContext';
 
 import { GameSettingsProvider } from './context/GameSettingsContext';
+import { SpinGameProvider } from './context/SpinGameContext';
 
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 
 import { Footer } from './components/Footer';
 import { ToastContainer } from './components/Toast';
+import { WelcomeModal } from './components/WelcomeModal';
 
 import { Home } from './pages/Home';
 import { Shop } from './pages/Shop';
@@ -54,9 +56,11 @@ const ScrollToTop = () => {
 const AppLayout: React.FC = () => {
   const { pathname } = useLocation();
   const { isServerConnected } = useServerStatus();
+  const { products: storeProducts } = useProducts();
   
-  // Hide Navbar & Footer on Admin pages or when server is disconnected
-  const hideHeaderFooter = pathname.startsWith('/admin') || !isServerConnected;
+  // Hide Navbar & Footer on Admin pages or when server is busy without any cached catalog
+  const isServerBusyScreen = !isServerConnected && storeProducts.length === 0;
+  const hideHeaderFooter = pathname.startsWith('/admin') || isServerBusyScreen;
   const isCheckout = pathname === '/checkout';
   const hideFooter = hideHeaderFooter || isCheckout;
   const hideBottomNav = hideHeaderFooter || isCheckout;
@@ -130,6 +134,7 @@ const AppLayout: React.FC = () => {
       {!hideFooter && <Footer />}
       {!hideBottomNav && <BottomNav />}
       <ToastContainer />
+      <WelcomeModal />
     </div>
   );
 };
@@ -145,10 +150,12 @@ export default function App() {
                 <CategoryProvider>
                   <ProductProvider>
                     <GameSettingsProvider>
-                      <Router>
-                        <ScrollToTop />
-                        <AppLayout />
-                      </Router>
+                      <SpinGameProvider>
+                        <Router>
+                          <ScrollToTop />
+                          <AppLayout />
+                        </Router>
+                      </SpinGameProvider>
                     </GameSettingsProvider>
                   </ProductProvider>
                 </CategoryProvider>

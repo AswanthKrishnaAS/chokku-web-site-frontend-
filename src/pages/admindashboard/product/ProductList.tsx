@@ -28,7 +28,8 @@ import {
   Square,
   Download,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  CreditCard
 } from 'lucide-react';
 import { useProducts } from '../../../context/ProductContext';
 import { useCategories } from '../../../context/CategoryContext';
@@ -226,15 +227,24 @@ export const ProductList: React.FC = () => {
 
   // Filter products based on search term, category, and stock status
   const filteredProducts = products.filter((product) => {
+    const q = searchTerm.toLowerCase().trim();
     const matchesSearch =
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (product.categoryName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (product.category || '').toLowerCase().includes(searchTerm.toLowerCase());
+      !q ||
+      product.name.toLowerCase().includes(q) ||
+      (product.categoryName || '').toLowerCase().includes(q) ||
+      (product.category || '').toLowerCase().includes(q) ||
+      (product.tags || []).some((t) => t.toLowerCase().includes(q));
 
+    const targetCat = categories.find((c) => c.slug === selectedCategory || c.id === selectedCategory);
     const matchesCategory =
       selectedCategory === 'all' ||
       product.category === selectedCategory ||
-      product.categoryName === selectedCategory;
+      (product.categoryName || '').toLowerCase() === selectedCategory.toLowerCase() ||
+      (targetCat && (
+        product.category === targetCat.slug ||
+        product.category === targetCat.id ||
+        (product.categoryName || '').toLowerCase() === targetCat.name.toLowerCase()
+      ));
 
     const matchesStock =
       selectedStockStatus === 'all'
@@ -250,7 +260,7 @@ export const ProductList: React.FC = () => {
   const totalProducts = products.length;
   const inStockCount = products.filter((p) => p.stock > 0).length;
   const outOfStockCount = products.filter((p) => p.stock <= 0).length;
-  const featuredCount = products.filter((p) => p.isFeatured).length;
+  const codCount = products.filter((p) => p.isCodAvailable !== false).length;
 
   const handleDelete = async (productId: string, productName: string) => {
     if (!window.confirm(`Are you sure you want to delete "${productName}"?`)) {
@@ -345,11 +355,11 @@ export const ProductList: React.FC = () => {
 
           <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-2xs space-y-1">
             <div className="flex items-center justify-between text-gray-500">
-              <span className="text-xs font-extrabold uppercase tracking-wider">Featured</span>
-              <Sparkles className="w-4 h-4 text-amber-500" />
+              <span className="text-xs font-extrabold uppercase tracking-wider">COD Enabled</span>
+              <CreditCard className="w-4 h-4 text-emerald-600" />
             </div>
-            <div className="text-2xl font-black text-amber-500">{featuredCount}</div>
-            <p className="text-[11px] text-gray-500 font-medium">Homepage items</p>
+            <div className="text-2xl font-black text-emerald-600">{codCount}</div>
+            <p className="text-[11px] text-gray-500 font-medium">Supports Cash on Delivery</p>
           </div>
         </div>
 
@@ -429,80 +439,92 @@ export const ProductList: React.FC = () => {
                     <th className="py-3 px-4">Category</th>
                     <th className="py-3 px-4">Price</th>
                     <th className="py-3 px-4">Stock</th>
-                    <th className="py-3 px-4">Homepage Sections</th>
+                    <th className="py-3 px-4">Payment Methods</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 font-semibold text-gray-800">
-                  {filteredProducts.map((product) => (
-                    <tr key={product.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="py-3.5 px-4 flex items-center gap-3">
-                        <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-gray-200 bg-white shrink-0 shadow-2xs">
-                          {product.image ? (
-                            <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-sm">📦</div>
-                          )}
-                        </div>
-                        <div className="space-y-0.5">
-                          <span className="font-extrabold text-gray-900 line-clamp-1">{product.name}</span>
-                          {product.discountTag && (
-                            <span className="inline-block text-[9px] font-black bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200">
-                              {product.discountTag}
-                            </span>
-                          )}
-                        </div>
-                      </td>
+                  {filteredProducts.map((product) => {
+                    const matchedCat = categories.find(
+                      (c) =>
+                        c.slug === product.category ||
+                        c.id === product.category ||
+                        c.name.toLowerCase() === (product.categoryName || '').toLowerCase()
+                    );
+                    const displayCategory = matchedCat ? matchedCat.name : (product.categoryName || product.category || 'General');
 
-                      <td className="py-3.5 px-4 text-gray-600 font-bold">
-                        {product.categoryName || product.category || 'General'}
-                      </td>
+                    return (
+                      <tr key={product.id} className="hover:bg-gray-50/80 transition-colors">
+                        <td className="py-3.5 px-4 flex items-center gap-3">
+                          <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-gray-200 bg-white shrink-0 shadow-2xs">
+                            {product.image ? (
+                              <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-sm">📦</div>
+                            )}
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className="font-extrabold text-gray-900 line-clamp-1">{product.name}</span>
+                            {product.discountTag && (
+                              <span className="inline-block text-[9px] font-black bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200">
+                                {product.discountTag}
+                              </span>
+                            )}
+                          </div>
+                        </td>
 
-                      <td className="py-3.5 px-4 font-bold">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[#488710] font-extrabold">₹{product.price}</span>
-                          {product.originalPrice > product.price && (
-                            <span className="text-gray-400 line-through text-[11px]">₹{product.originalPrice}</span>
-                          )}
-                        </div>
-                      </td>
+                        <td className="py-3.5 px-4 text-gray-600 font-bold">
+                          {displayCategory}
+                        </td>
 
-                      <td className="py-3.5 px-4">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
-                            product.stock > 0
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-rose-50 text-rose-700 border-rose-200'
-                          }`}
-                        >
-                          {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
-                        </span>
-                      </td>
+                        <td className="py-3.5 px-4 font-bold">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[#488710] font-extrabold">₹{product.price}</span>
+                            {product.originalPrice > product.price && (
+                              <span className="text-gray-400 line-through text-[11px]">₹{product.originalPrice}</span>
+                            )}
+                          </div>
+                        </td>
 
-                      <td className="py-3.5 px-4">
-                        <div className="flex flex-wrap gap-1">
-                          {product.isFeatured && (
-                            <span className="bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-extrabold px-1.5 py-0.5 rounded">
-                              ★ Featured
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                              product.stock > 0
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-rose-50 text-rose-700 border-rose-200'
+                            }`}
+                          >
+                            {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
+                          </span>
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${
+                                product.isCodAvailable !== false
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                  : 'bg-gray-100 text-gray-400 border-gray-200 line-through'
+                              }`}
+                            >
+                              {product.isCodAvailable !== false ? '✓ COD' : '✕ No COD'}
                             </span>
-                          )}
-                          {product.isNewArrival && (
-                            <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-extrabold px-1.5 py-0.5 rounded">
-                              ✦ New
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${
+                                product.isOnlinePaymentAvailable !== false
+                                  ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                  : 'bg-gray-100 text-gray-400 border-gray-200 line-through'
+                              }`}
+                            >
+                              {product.isOnlinePaymentAvailable !== false ? '✓ Online' : '✕ No Online'}
                             </span>
-                          )}
-                          {product.isBestSeller && (
-                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-extrabold px-1.5 py-0.5 rounded">
-                              🔥 Best-Seller
-                            </span>
-                          )}
-                          {product.tryOn && (
-                            <span className="bg-purple-50 text-purple-700 border border-purple-200 text-[9px] font-extrabold px-1.5 py-0.5 rounded">
-                              👔 Try On
-                            </span>
-                          )}
-                        </div>
-                      </td>
+                            {product.tryOn && (
+                              <span className="bg-purple-50 text-purple-700 border border-purple-200 text-[9px] font-extrabold px-1.5 py-0.5 rounded">
+                                👔 Try On
+                              </span>
+                            )}
+                          </div>
+                        </td>
 
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -540,8 +562,9 @@ export const ProductList: React.FC = () => {
                         </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
+                  );
+                })}
+              </tbody>
               </table>
             </div>
           )}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
@@ -41,7 +41,13 @@ import {
   Trophy,
   MapPin,
   FolderTree,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Disc,
+  Coins,
+  Percent,
+  Dices,
+  AlertTriangle,
+  RotateCw
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useWebsiteSettings, HomeSlideItem } from '../../context/WebsiteSettingsContext';
@@ -49,6 +55,8 @@ import { useCategories } from '../../context/CategoryContext';
 import { useProducts } from '../../context/ProductContext';
 import { useToast } from '../../context/ToastContext';
 import { useGameSettings, GiftBoxRewardConfig } from '../../context/GameSettingsContext';
+import { useSpinGame, SpinSlotConfig, DEFAULT_SPIN_SLOTS, SimulationResult } from '../../context/SpinGameContext';
+import { SpinGameManagement } from './SpinGameManagement';
 import { PRODUCTS } from '../../data/products';
 import { CATEGORIES } from '../../data/categories';
 import { Product, Order } from '../../types';
@@ -87,15 +95,39 @@ export const AdminDashboard: React.FC = () => {
   } = useProducts();
   const { addToast } = useToast();
   const { catchTheGiftSettings, isConfigured, createCatchTheGiftSettings, updateCatchTheGiftSettings, resetCatchTheGiftSettings } = useGameSettings();
+  const {
+    spinGameSettings,
+    isConfigured: isSpinConfigured,
+    isLoading: isSpinLoading,
+    saveSpinSettings,
+    resetSpinSettings,
+    simulateSpins: runSpinSimulation,
+  } = useSpinGame();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // Selected Section
   const [activeSection, setActiveSection] = useState<
-    'dashboard' | 'customers' | 'products' | 'orders' | 'categories' | 'payments' | 'settings' | 'website-settings' | 'home-slider' | 'catch-the-gift-settings' | 'catch-the-gift-scores'
+    'dashboard' | 'customers' | 'products' | 'orders' | 'categories' | 'payments' | 'settings' | 'website-settings' | 'home-slider' | 'catch-the-gift-settings' | 'catch-the-gift-scores' | 'spin-and-win-settings'
   >('dashboard');
 
   // Sidebar Game dropdown state
   const [isGameMenuOpen, setIsGameMenuOpen] = useState(true);
+
+  // Spin and Win Game Settings Form State
+  const [spinSlots, setSpinSlots] = useState<SpinSlotConfig[]>(() => spinGameSettings.slots);
+  const [spinGameTitle, setSpinGameTitle] = useState(spinGameSettings.gameTitle || 'Spin and Win');
+  const [spinDailyFreeSpins, setSpinDailyFreeSpins] = useState(spinGameSettings.dailyFreeSpins || 1);
+  const [isSavingSpin, setIsSavingSpin] = useState(false);
+  const [spinSimulationResult, setSpinSimulationResult] = useState<SimulationResult | null>(null);
+  const [isSimulatingSpins, setIsSimulatingSpins] = useState(false);
+  const [spinCustomerScores, setSpinCustomerScores] = useState<any[]>([]);
+  const [spinActiveTab, setSpinActiveTab] = useState<'slots' | 'simulator' | 'history'>('slots');
+
+  // Interactive Live Preview Wheel in Admin Dashboard
+  const [previewWheelRotation, setPreviewWheelRotation] = useState(0);
+  const [previewIsSpinning, setPreviewIsSpinning] = useState(false);
+  const [previewWonSlot, setPreviewWonSlot] = useState<SpinSlotConfig | null>(null);
 
   // Catch the Gift Game Settings Form States
   const [gameGiftCount, setGameGiftCount] = useState(catchTheGiftSettings.giftCount || 5);
@@ -278,6 +310,174 @@ export const AdminDashboard: React.FC = () => {
   const handleResetGameSettings = () => {
     resetCatchTheGiftSettings();
     addToast('Reset to Defaults', 'Game settings restored to standard values.', 'info');
+  };
+
+  // Sync Spin and Win settings from context to state
+  React.useEffect(() => {
+    if (spinGameSettings && Array.isArray(spinGameSettings.slots) && spinGameSettings.slots.length === 8) {
+      setSpinSlots(spinGameSettings.slots);
+      setSpinGameTitle(spinGameSettings.gameTitle || 'Spin and Win');
+      setSpinDailyFreeSpins(spinGameSettings.dailyFreeSpins || 1);
+    }
+  }, [spinGameSettings]);
+
+  // Sync section from URL search params (?section=spin-and-win-settings)
+  React.useEffect(() => {
+    try {
+      const section = searchParams.get('section');
+      if (
+        section &&
+        [
+          'dashboard',
+          'customers',
+          'products',
+          'orders',
+          'categories',
+          'payments',
+          'settings',
+          'website-settings',
+          'home-slider',
+          'catch-the-gift-settings',
+          'catch-the-gift-scores',
+          'spin-and-win-settings',
+        ].includes(section)
+      ) {
+        setActiveSection(section as any);
+      }
+    } catch (e) {}
+  }, [searchParams]);
+
+  // Fetch Customer Spin Scores from Backend API
+  React.useEffect(() => {
+    const fetchSpinScores = async () => {
+      try {
+        const res = await safeFetch('/spin-game/all-scores');
+        if (res.ok && res.isJson && res.data?.success && Array.isArray(res.data.spins)) {
+          setSpinCustomerScores(res.data.spins);
+        }
+      } catch (err) {
+        console.warn('Could not fetch spin game scores:', err);
+      }
+    };
+    if (activeSection === 'spin-and-win-settings') {
+      fetchSpinScores();
+    }
+  }, [activeSection]);
+
+  const handleSpinSlotFieldChange = (index: number, field: keyof SpinSlotConfig, value: any) => {
+    setSpinSlots((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const spinTotalProbability = Math.round(
+    spinSlots.reduce((sum, s) => sum + (Number(s.probability) || 0), 0) * 100
+  ) / 100;
+
+  const handleAutoAssignRemainder = () => {
+    const sumWithoutLast = spinSlots
+      .slice(0, 7)
+      .reduce((sum, s) => sum + (Number(s.probability) || 0), 0);
+    const remainder = Math.max(0, Math.round((100 - sumWithoutLast) * 100) / 100);
+
+    setSpinSlots((prev) => {
+      const updated = [...prev];
+      updated[7] = {
+        ...updated[7],
+        label: updated[7].label || 'Better Luck Next Time',
+        rewardType: 'no_prize',
+        probability: remainder,
+      };
+      return updated;
+    });
+    addToast('Probability Balanced', `Assigned remaining ${remainder}% to Slot 8. Total is now 100%!`, 'success');
+  };
+
+  const handleSaveSpinSettingsSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    if (spinTotalProbability > 100) {
+      addToast(
+        'Invalid Probabilities',
+        `Total winning probability is ${spinTotalProbability}%, which exceeds 100%! Please reduce slot percentages before saving.`,
+        'error'
+      );
+      return;
+    }
+
+    setIsSavingSpin(true);
+    try {
+      const res = await saveSpinSettings({
+        gameTitle: spinGameTitle,
+        dailyFreeSpins: Number(spinDailyFreeSpins) || 1,
+        slots: spinSlots,
+      });
+
+      if (res.success) {
+        addToast('Spin & Win Saved!', res.message, 'success');
+      } else {
+        addToast('Save Failed', res.message, 'error');
+      }
+    } finally {
+      setIsSavingSpin(false);
+    }
+  };
+
+  const handleResetSpinSettingsSubmit = () => {
+    resetSpinSettings();
+    setSpinSlots(DEFAULT_SPIN_SLOTS);
+    addToast('Reset to Defaults', 'Restored 8 standard prize slots and default probabilities.', 'info');
+  };
+
+  const handleRunSimulation = async (count: number) => {
+    setIsSimulatingSpins(true);
+    try {
+      const result = await runSpinSimulation(count, spinSlots);
+      if (result) {
+        setSpinSimulationResult(result);
+        addToast('Simulation Complete', `Generated ${count.toLocaleString()} spins. Check empirical win frequencies below.`, 'success');
+      }
+    } catch (err) {
+      addToast('Simulation Error', 'Failed to execute simulation', 'error');
+    } finally {
+      setIsSimulatingSpins(false);
+    }
+  };
+
+  const handlePreviewTestSpin = () => {
+    if (previewIsSpinning) return;
+    setPreviewIsSpinning(true);
+    setPreviewWonSlot(null);
+
+    // Pick random outcome based on configured probabilities
+    const roll = Math.random() * 100;
+    let cum = 0;
+    let winningIndex = 7;
+    for (let i = 0; i < spinSlots.length; i++) {
+      cum += Number(spinSlots[i].probability) || 0;
+      if (roll < cum) {
+        winningIndex = i;
+        break;
+      }
+    }
+
+    const sliceAngle = 360 / 8; // 45 deg
+    const targetAngleMod = (360 - (winningIndex * sliceAngle + sliceAngle / 2)) % 360;
+    const currentAngleMod = ((previewWheelRotation % 360) + 360) % 360;
+    const extraToReachTarget = (targetAngleMod - currentAngleMod + 360) % 360;
+    const fullSpins = 360 * 6;
+    const nextTotalRotation = previewWheelRotation + fullSpins + extraToReachTarget;
+
+    setPreviewWheelRotation(nextTotalRotation);
+
+    setTimeout(() => {
+      setPreviewIsSpinning(false);
+      const won = spinSlots[winningIndex];
+      setPreviewWonSlot(won);
+      addToast('Preview Winner!', `Landed on Slot ${winningIndex + 1}: ${won.label} (${won.probability}%)`, 'success');
+    }, 4800);
   };
 
   const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
@@ -547,9 +747,10 @@ export const AdminDashboard: React.FC = () => {
     );
   };
 
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
   const handleAdminLogout = () => {
-    adminLogout();
-    navigate('/admin-login');
+    setShowLogoutConfirm(true);
   };
 
   const filteredProducts = productList.filter((p) =>
@@ -905,10 +1106,8 @@ export const AdminDashboard: React.FC = () => {
   const [prodOriginalPrice, setProdOriginalPrice] = useState<string>('99.99');
   const [prodSellingPrice, setProdSellingPrice] = useState<string>('79.99');
   const [prodDiscountTag, setProdDiscountTag] = useState('SAVE 20%');
-  const [prodDescription, setProdDescription] = useState('');
-  const [prodIsFeatured, setProdIsFeatured] = useState(true);
-  const [prodIsNewArrival, setProdIsNewArrival] = useState(true);
-  const [prodIsBestSeller, setProdIsBestSeller] = useState(false);
+  const [prodIsCodAvailable, setProdIsCodAvailable] = useState(true);
+  const [prodIsOnlinePaymentAvailable, setProdIsOnlinePaymentAvailable] = useState(true);
 
   // 1 to 7 image files & preview URLs
   const [prodFiles, setProdFiles] = useState<File[]>([]);
@@ -996,9 +1195,8 @@ export const AdminDashboard: React.FC = () => {
       stock: Number(prodStock) || 0,
       image: finalGalleryImages[0] || '',
       galleryImages: finalGalleryImages,
-      isFeatured: prodIsFeatured,
-      isNewArrival: prodIsNewArrival,
-      isBestSeller: prodIsBestSeller,
+      isCodAvailable: prodIsCodAvailable,
+      isOnlinePaymentAvailable: prodIsOnlinePaymentAvailable,
     });
     setIsSavingProd(false);
 
@@ -1242,18 +1440,18 @@ export const AdminDashboard: React.FC = () => {
                 <button
                   onClick={() => setIsGameMenuOpen(!isGameMenuOpen)}
                   className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer ${
-                    activeSection === 'catch-the-gift-settings' || activeSection === 'catch-the-gift-scores'
+                    activeSection === 'catch-the-gift-settings' || activeSection === 'catch-the-gift-scores' || activeSection === 'spin-and-win-settings'
                       ? 'bg-[#f0f9e8] text-[#488710] font-extrabold shadow-2xs border border-[#d2ea9d]/60'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <Gamepad2 className={`w-4 h-4 ${activeSection === 'catch-the-gift-settings' || activeSection === 'catch-the-gift-scores' ? 'text-[#488710]' : 'text-gray-400'}`} />
+                    <Gamepad2 className={`w-4 h-4 ${activeSection === 'catch-the-gift-settings' || activeSection === 'catch-the-gift-scores' || activeSection === 'spin-and-win-settings' ? 'text-[#488710]' : 'text-gray-400'}`} />
                     <span>Game</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-[#488710]">
-                      2
+                      3
                     </span>
                     <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform duration-200 ${isGameMenuOpen ? 'rotate-180' : ''}`} />
                   </div>
@@ -1291,6 +1489,21 @@ export const AdminDashboard: React.FC = () => {
                       <Trophy className="w-3.5 h-3.5" />
                       <span>Customer Scores</span>
                     </button>
+
+                    <button
+                      onClick={() => {
+                        setActiveSection('spin-and-win-settings');
+                        setIsMobileSidebarOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        activeSection === 'spin-and-win-settings'
+                          ? 'bg-[#488710] text-white shadow-xs'
+                          : 'text-gray-600 hover:text-[#488710] hover:bg-[#f0f9e8]'
+                      }`}
+                    >
+                      <Disc className="w-3.5 h-3.5" />
+                      <span>Spin and Win</span>
+                    </button>
                   </div>
                 )}
               </div>
@@ -1317,6 +1530,55 @@ export const AdminDashboard: React.FC = () => {
             onClick={() => setIsMobileSidebarOpen(false)}
             className="fixed inset-0 z-30 bg-black/40 lg:hidden"
           />
+        )}
+
+        {/* ADMIN LOGOUT CONFIRMATION MODAL */}
+        {showLogoutConfirm && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
+            onClick={() => setShowLogoutConfirm(false)}
+          >
+            <div
+              className="relative w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl border border-gray-100 text-center animate-scale-up overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto mb-3 shadow-xs">
+                <LogOut className="w-6 h-6 stroke-[2.2]" />
+              </div>
+
+              <h3 className="text-lg font-black text-gray-900 tracking-tight">
+                Confirm Logout
+              </h3>
+
+              <p className="mt-1.5 text-xs text-gray-500 font-medium leading-relaxed">
+                Are you sure you want to log out from the Admin Portal?
+              </p>
+
+              <div className="mt-5 flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="flex-1 py-2.5 px-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-xs transition-all cursor-pointer active:scale-98"
+                >
+                  No
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLogoutConfirm(false);
+                    adminLogout();
+                    navigate('/admin-login');
+                  }}
+                  className="flex-1 py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs shadow-md shadow-rose-600/25 transition-all cursor-pointer active:scale-98"
+                >
+                  Yes
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* ================= MAIN DASHBOARD CONTENT AREA ================= */}
@@ -3428,6 +3690,10 @@ export const AdminDashboard: React.FC = () => {
             </div>
           )}
 
+          {/* ================= SECTION: SPIN AND WIN GAME SETTINGS ================= */}
+          {activeSection === 'spin-and-win-settings' && (
+            <SpinGameManagement />
+          )}
 
         </main>
 
@@ -3658,40 +3924,38 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* 6. HOMEPAGE PLACEMENT FLAGS */}
+              {/* PAYMENT OPTIONS (COD & ONLINE) */}
               <div className="bg-[#f0f9e8] p-3.5 rounded-2xl border border-[#d2ea9d] space-y-2">
                 <label className="block font-extrabold text-[#488710] text-xs uppercase tracking-wider">
-                  Homepage Placement Sections
+                  Product Payment Options
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-bold text-gray-800">
-                  <label className="flex items-center gap-2 cursor-pointer bg-white p-2 rounded-xl border border-emerald-100 hover:border-[#609f00]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-bold text-gray-800">
+                  <label className="flex items-center gap-2 cursor-pointer bg-white p-2.5 rounded-xl border border-emerald-100 hover:border-[#609f00]">
                     <input
                       type="checkbox"
-                      checked={prodIsFeatured}
-                      onChange={(e) => setProdIsFeatured(e.target.checked)}
+                      id="modal-prod-cod-checkbox"
+                      checked={prodIsCodAvailable}
+                      onChange={(e) => setProdIsCodAvailable(e.target.checked)}
                       className="w-4 h-4 accent-[#609f00] rounded cursor-pointer"
                     />
-                    <span>★ Featured Products</span>
+                    <div>
+                      <div className="font-extrabold text-gray-900">Cash on Delivery (COD)</div>
+                      <div className="text-[10px] text-gray-500 font-medium">Allow pay on delivery</div>
+                    </div>
                   </label>
 
-                  <label className="flex items-center gap-2 cursor-pointer bg-white p-2 rounded-xl border border-emerald-100 hover:border-[#609f00]">
+                  <label className="flex items-center gap-2 cursor-pointer bg-white p-2.5 rounded-xl border border-blue-100 hover:border-blue-500">
                     <input
                       type="checkbox"
-                      checked={prodIsNewArrival}
-                      onChange={(e) => setProdIsNewArrival(e.target.checked)}
-                      className="w-4 h-4 accent-[#609f00] rounded cursor-pointer"
+                      id="modal-prod-online-checkbox"
+                      checked={prodIsOnlinePaymentAvailable}
+                      onChange={(e) => setProdIsOnlinePaymentAvailable(e.target.checked)}
+                      className="w-4 h-4 accent-blue-600 rounded cursor-pointer"
                     />
-                    <span>✦ New Arrivals</span>
-                  </label>
-
-                  <label className="flex items-center gap-2 cursor-pointer bg-white p-2 rounded-xl border border-emerald-100 hover:border-[#609f00]">
-                    <input
-                      type="checkbox"
-                      checked={prodIsBestSeller}
-                      onChange={(e) => setProdIsBestSeller(e.target.checked)}
-                      className="w-4 h-4 accent-[#609f00] rounded cursor-pointer"
-                    />
-                    <span>🔥 Best-Selling Products</span>
+                    <div>
+                      <div className="font-extrabold text-gray-900">Online Payment</div>
+                      <div className="text-[10px] text-gray-500 font-medium">UPI, Cards &amp; NetBanking</div>
+                    </div>
                   </label>
                 </div>
               </div>

@@ -15,14 +15,26 @@ export const SearchBar: React.FC<{ className?: string }> = ({ className = '' }) 
 
   useEffect(() => {
     if (query.trim().length > 1) {
-      const q = query.toLowerCase();
+      const q = query.toLowerCase().trim();
+      const words = q.split(/\s+/).filter(Boolean);
       const allProducts = storeProducts.length > 0 ? storeProducts : PRODUCTS;
-      const matches = allProducts.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          (p.categoryName && p.categoryName.toLowerCase().includes(q)) ||
-          (p.tags && p.tags.some((t) => t.toLowerCase().includes(q)))
-      ).slice(0, 5);
+      const matches = allProducts
+        .filter((p) => {
+          const text = [
+            p.name,
+            p.categoryName,
+            p.category,
+            p.description,
+            ...(Array.isArray(p.tags) ? p.tags : []),
+            ...(Array.isArray(p.highlights) ? p.highlights : []),
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+
+          return text.includes(q) || words.every((w) => text.includes(w));
+        })
+        .slice(0, 6);
       setSuggestions(matches);
       setIsOpen(true);
     } else {

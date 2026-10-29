@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -17,16 +17,33 @@ import {
   Film,
   AlertTriangle,
   CheckCircle2,
-  X
+  X,
+  PartyPopper,
+  Coins,
+  Copy
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useGameSettings } from '../context/GameSettingsContext';
 import { safeFetch } from '../utils/api';
-import { MyGifts } from '../components/MyGifts';
 import gami1 from '../assets/img/gami1.png';
 import gameboy from '../assets/img/gameboy.png';
 import gamebgm from '../assets/img/gamebgm.png';
+import festiveBg from '../assets/img/Festive.png';
+import tostMonkey from '../assets/img/tost.png';
+import notificationSound from '../assets/notification.mp3';
+
+export interface CaughtGiftReward {
+  id: string;
+  boxNumber: number;
+  rewardType: 'coins' | 'voucher' | 'product_offer';
+  title: string;
+  badge: string;
+  description: string;
+  value: string;
+  code?: string;
+  productImage?: string;
+}
 
 interface CouponItem {
   id: string;
@@ -64,7 +81,7 @@ export const CatchtheGift: React.FC = () => {
   useEffect(() => {
     if (!customerUser && !isTestMode) {
       addToast('Login Required', 'Please login to access Catch the Gift and save your game scores!', 'warning');
-      navigate('/login', { state: { from: '/catch-the-gift' } });
+      navigate('/login', { state: { returnUrl: '/catch-the-gift', from: '/catch-the-gift' } });
     }
   }, [customerUser, isTestMode, navigate]);
 
@@ -79,6 +96,46 @@ export const CatchtheGift: React.FC = () => {
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
+
+  // Final Round Celebration & Unboxing States
+  const [roundGiftsCaught, setRoundGiftsCaught] = useState<number>(0);
+  const [roundCoinsCaught, setRoundCoinsCaught] = useState<number>(0);
+  const [showCelebration, setShowCelebration] = useState<boolean>(false);
+  const [earnedGiftsList, setEarnedGiftsList] = useState<CaughtGiftReward[]>([]);
+  const [currentGiftIndex, setCurrentGiftIndex] = useState<number>(0);
+  const [unboxingState, setUnboxingState] = useState<'unopened' | 'exploding' | 'revealed'>('unopened');
+
+  // Memoized Coin Celebration Animation Particles (36 radial blasting coins)
+  const celebrationCoins = useMemo(() => {
+    return Array.from({ length: 36 }).map((_, i) => {
+      const angle = (i / 36) * 360 + (Math.sin(i * 1.5) * 12);
+      const rad = (angle * Math.PI) / 180;
+      const distance = 160 + ((i * 37) % 200);
+      const tx = Math.cos(rad) * distance;
+      const ty = Math.sin(rad) * distance;
+      const rot = 360 + ((i * 83) % 720);
+      const delay = (i % 6) * 0.04;
+      const duration = 1.0 + (i % 5) * 0.15;
+      const scale = 0.8 + (i % 4) * 0.15;
+      return { id: i, tx, ty, rot, delay, duration, scale };
+    });
+  }, []);
+
+  // Memoized Party-Popper Confetti Fluttering Streamers (42 falling strips)
+  const celebrationConfetti = useMemo(() => {
+    const colors = ['#10b981', '#fbbf24', '#f59e0b', '#06b6d4', '#f43f5e', '#a855f7', '#3b82f6', '#84cc16'];
+    return Array.from({ length: 42 }).map((_, i) => {
+      const left = ((i * 23) % 96) + 2;
+      const drift = ((i * 19) % 140) - 70;
+      const spin = 360 + ((i * 47) % 720);
+      const delay = (i % 10) * 0.15;
+      const duration = 2.4 + (i % 6) * 0.3;
+      const color = colors[i % colors.length];
+      const width = 7 + (i % 5) * 2;
+      const height = 12 + (i % 6) * 3;
+      return { id: i, left, drift, spin, delay, duration, color, width, height };
+    });
+  }, []);
 
   // Basket position state (in percentage 8% to 92%)
   const [basketPos, setBasketPos] = useState(50);
@@ -1243,22 +1300,6 @@ export const CatchtheGift: React.FC = () => {
                 </div>
               </div>
 
-              {/* 1. VIEW YOUR WON GIFTS BUTTON (PRIMARY ACTION) */}
-              <button
-                onClick={() => {
-                  setGameState('idle');
-                  setTimeout(() => {
-                    const giftsElem = document.getElementById('my-gifts-section');
-                    if (giftsElem) {
-                      giftsElem.scrollIntoView({ behavior: 'smooth' });
-                    }
-                  }, 150);
-                }}
-                className="w-full max-w-xs bg-gradient-to-r from-emerald-500 via-green-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-black py-3 px-4 rounded-2xl text-xs sm:text-sm shadow-xl flex items-center justify-center gap-2 cursor-pointer transition-transform hover:scale-102 active:scale-98 border border-white/40"
-              >
-                <Gift className="w-4.5 h-4.5 text-amber-200 fill-amber-200" />
-                <span>VIEW YOUR WON GIFTS</span>
-              </button>
 
               {/* 2. REPLAY RESTRICTION & AD VIDEO REQUIREMENT (PLAY AGAIN REMOVED) */}
               <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/15 w-full max-w-xs text-center space-y-2">
@@ -1433,10 +1474,7 @@ export const CatchtheGift: React.FC = () => {
         </div>
       )}
 
-      {/* MY GIFTS UNBOXING & REWARDS SECTION */}
-      <div id="my-gifts-section" className="max-w-4xl w-full pt-4 scroll-mt-6">
-        <MyGifts />
-      </div>
+
     </div>
   );
 };
