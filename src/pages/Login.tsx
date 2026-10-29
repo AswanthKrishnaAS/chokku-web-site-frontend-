@@ -20,7 +20,7 @@ import loginImg from '../assets/img/login.png';
 export const Login: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { login, register } = useAuth();
+  const { login, register, showWelcomeModal } = useAuth();
   const { addToast } = useToast();
 
   // Main Tab State: 'signin' or 'signup'
@@ -47,7 +47,7 @@ export const Login: React.FC = () => {
   const [regLoading, setRegLoading] = useState(false);
 
   const getPostAuthTarget = (): string => {
-    const returnUrl = location.state?.returnUrl || sessionStorage.getItem('chokku_redirect_after_login');
+    const returnUrl = location.state?.returnUrl || location.state?.from || sessionStorage.getItem('chokku_redirect_after_login');
     const buyNowProductId = location.state?.buyNowProductId || sessionStorage.getItem('chokku_buy_now_product_id');
 
     sessionStorage.removeItem('chokku_redirect_after_login');
@@ -73,6 +73,7 @@ export const Login: React.FC = () => {
     const success = await login(username.trim(), password);
     setSignInLoading(false);
     if (success) {
+      showWelcomeModal(username.trim(), false);
       const target = getPostAuthTarget();
       navigate(target, { replace: true });
     }
@@ -81,8 +82,9 @@ export const Login: React.FC = () => {
   // Step 1: Handle Phone Number Next Click
   const handlePhoneNext = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phoneNumber.trim() || phoneNumber.trim().length < 7) {
-      addToast('Invalid Phone Number', 'Please enter a valid mobile number to continue.', 'error');
+    const cleanDigits = phoneNumber.replace(/\D/g, '');
+    if (cleanDigits.length !== 10) {
+      addToast('Invalid Mobile Number', 'Please enter a valid 10-digit mobile number to continue.', 'error');
       return;
     }
     setSignUpStep('enter_details');
@@ -93,6 +95,12 @@ export const Login: React.FC = () => {
     e.preventDefault();
     if (!regName.trim() || !regEmail.trim() || !regPassword) {
       addToast('Missing Details', 'Please fill in all required fields.', 'error');
+      return;
+    }
+    const cleanDigits = phoneNumber.replace(/\D/g, '');
+    if (cleanDigits.length !== 10) {
+      addToast('Invalid Mobile Number', 'Please enter a valid 10-digit mobile number.', 'error');
+      setSignUpStep('enter_phone');
       return;
     }
     setRegLoading(true);
@@ -107,6 +115,7 @@ export const Login: React.FC = () => {
     });
     setRegLoading(false);
     if (success) {
+      showWelcomeModal(regName.trim(), true);
       const target = getPostAuthTarget();
       navigate(target, { replace: true });
     }
@@ -280,9 +289,14 @@ export const Login: React.FC = () => {
                 {signUpStep === 'enter_phone' && (
                   <form onSubmit={handlePhoneNext} className="space-y-4 animate-fade-in">
                     <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                        Mobile Number
-                      </label>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-bold text-gray-700">
+                          Mobile Number
+                        </label>
+                        <span className={`text-[11px] font-bold ${phoneNumber.length === 10 ? 'text-[#488710]' : 'text-gray-400'}`}>
+                          {phoneNumber.length}/10 digits
+                        </span>
+                      </div>
                       <div className="flex items-center gap-2">
                         {/* Country Code Selector */}
                         <div className="relative">
@@ -306,19 +320,35 @@ export const Login: React.FC = () => {
                           </div>
                           <input
                             type="tel"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={10}
                             required
                             value={phoneNumber}
-                            onChange={(e) => setPhoneNumber(e.target.value)}
-                            placeholder="Enter mobile number"
+                            onChange={(e) => {
+                              const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+                              setPhoneNumber(digitsOnly);
+                            }}
+                            placeholder="Enter 10-digit mobile number"
                             className="peer w-full h-11 sm:h-12 pl-10 pr-4 text-sm font-medium bg-gray-50/70 border border-gray-200 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-3 focus:ring-[#488710]/15 focus:border-[#488710] focus:bg-white transition-all text-gray-800 placeholder:text-gray-400"
                           />
                         </div>
                       </div>
+                      {phoneNumber.length > 0 && phoneNumber.length < 10 && (
+                        <p className="text-[11px] text-amber-600 font-semibold mt-1.5 flex items-center gap-1">
+                          Please enter all 10 digits ({10 - phoneNumber.length} remaining)
+                        </p>
+                      )}
+                      {phoneNumber.length === 10 && (
+                        <p className="text-[11px] text-[#488710] font-semibold mt-1.5 flex items-center gap-1">
+                          ✓ Valid 10-digit mobile number
+                        </p>
+                      )}
                     </div>
 
                     <button
                       type="submit"
-                      disabled={!phoneNumber.trim()}
+                      disabled={phoneNumber.length !== 10}
                       className="w-full h-12 bg-[#488710] hover:bg-[#3d730d] active:scale-[0.99] text-white font-extrabold rounded-xl sm:rounded-2xl shadow-md shadow-[#488710]/25 hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
                       <span>Next</span>

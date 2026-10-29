@@ -38,6 +38,13 @@ export const EditProfile: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.phone) {
+      const cleanPhone = formData.phone.replace(/\D/g, '');
+      if (cleanPhone.length !== 10) {
+        addToast('Invalid Phone Number', 'Please enter a valid 10-digit mobile number.', 'error');
+        return;
+      }
+    }
     updateProfile(formData);
     addToast('Profile details updated successfully!', 'success');
     navigate('/profile');
@@ -136,15 +143,26 @@ export const EditProfile: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1.5">Phone Number *</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-gray-700">Phone Number *</label>
+                  <span className={`text-[11px] font-bold ${formData.phone.replace(/\D/g, '').length === 10 ? 'text-[#488710]' : 'text-gray-400'}`}>
+                    {formData.phone.replace(/\D/g, '').length}/10 digits
+                  </span>
+                </div>
                 <div className="relative">
                   <Phone className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
                   <input
-                    type="text"
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={10}
                     required
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="Enter phone number"
+                    onChange={(e) => {
+                      const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setFormData({ ...formData, phone: digitsOnly });
+                    }}
+                    placeholder="Enter 10-digit mobile number"
                     className="w-full pl-9 pr-3 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:border-[#488710] focus:bg-white font-medium"
                   />
                 </div>

@@ -16,7 +16,9 @@ import {
   Shirt,
   Link2,
   ExternalLink,
-  CheckCircle2
+  CheckCircle2,
+  CreditCard,
+  Banknote
 } from 'lucide-react';
 import { useProducts } from '../../../context/ProductContext';
 import { useCategories } from '../../../context/CategoryContext';
@@ -146,10 +148,9 @@ export const ProductAdd: React.FC = () => {
     }
   };
   
-  // Homepage flags
-  const [isFeatured, setIsFeatured] = useState(true);
-  const [isNewArrival, setIsNewArrival] = useState(true);
-  const [isBestSeller, setIsBestSeller] = useState(false);
+  // Payment Options Flags
+  const [isCodAvailable, setIsCodAvailable] = useState<boolean>(true);
+  const [isOnlinePaymentAvailable, setIsOnlinePaymentAvailable] = useState<boolean>(true);
 
   // Try On feature state
   const [tryOn, setTryOn] = useState(false);
@@ -364,9 +365,8 @@ export const ProductAdd: React.FC = () => {
       isAddPriceEnabled,
       image: finalGalleryImages[0] || (fetchedImagesReference[0] || ''),
       galleryImages: finalGalleryImages.length > 0 ? finalGalleryImages : fetchedImagesReference,
-      isFeatured,
-      isNewArrival,
-      isBestSeller,
+      isCodAvailable,
+      isOnlinePaymentAvailable,
       tryOn,
       tryOnImages: tryOn ? finalTryOnImages : [],
       tryOnType,
@@ -1064,59 +1064,68 @@ export const ProductAdd: React.FC = () => {
 
           </div>
 
-          {/* Section 6: Homepage Placement */}
+          {/* Section 6: Payment Options */}
           <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-2xs space-y-4">
             <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#488710] flex items-center gap-2 border-b border-gray-100 pb-3">
-              <Sparkles className="w-4 h-4" />
-              <span>6. Homepage Section Promotion</span>
+              <CreditCard className="w-4 h-4" />
+              <span>6. Payment Options</span>
             </h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
-              <label className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center gap-3 ${
-                isFeatured ? 'bg-[#f0f9e8] border-[#609f00] text-[#488710]' : 'bg-gray-50 border-gray-200 text-gray-600'
+            <p className="text-xs text-gray-500 font-medium">
+              Select which payment methods are accepted for this product during customer checkout.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              {/* COD Checkbox */}
+              <label className={`p-4 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                isCodAvailable ? 'bg-[#f0f9e8] border-[#609f00] text-[#488710]' : 'bg-gray-50 border-gray-200 text-gray-500'
               }`}>
                 <input
                   type="checkbox"
-                  checked={isFeatured}
-                  onChange={(e) => setIsFeatured(e.target.checked)}
-                  className="w-4 h-4 accent-[#609f00]"
+                  id="add-prod-cod-checkbox"
+                  checked={isCodAvailable}
+                  onChange={(e) => setIsCodAvailable(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 accent-[#609f00] cursor-pointer"
                 />
-                <div>
-                  <div className="text-xs font-black">★ Featured Product</div>
-                  <div className="text-[10px] text-gray-500 font-medium">Display in home featured slider</div>
+                <div className="flex-1">
+                  <div className="text-xs font-black text-gray-900 flex items-center gap-1.5">
+                    <Banknote className="w-3.5 h-3.5 text-[#609f00]" />
+                    <span>Cash on Delivery (COD)</span>
+                  </div>
+                  <div className="text-[11px] text-gray-500 font-medium mt-0.5">
+                    Allow customers to pay with cash or doorstep UPI on delivery.
+                  </div>
                 </div>
               </label>
 
-              <label className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center gap-3 ${
-                isNewArrival ? 'bg-blue-50 border-blue-400 text-blue-800' : 'bg-gray-50 border-gray-200 text-gray-600'
+              {/* Online Payment Checkbox */}
+              <label className={`p-4 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                isOnlinePaymentAvailable ? 'bg-blue-50/70 border-blue-400 text-blue-900' : 'bg-gray-50 border-gray-200 text-gray-500'
               }`}>
                 <input
                   type="checkbox"
-                  checked={isNewArrival}
-                  onChange={(e) => setIsNewArrival(e.target.checked)}
-                  className="w-4 h-4 accent-blue-600"
+                  id="add-prod-online-checkbox"
+                  checked={isOnlinePaymentAvailable}
+                  onChange={(e) => setIsOnlinePaymentAvailable(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 accent-blue-600 cursor-pointer"
                 />
-                <div>
-                  <div className="text-xs font-black">✦ New Arrival</div>
-                  <div className="text-[10px] text-gray-500 font-medium">Show in new arrivals grid</div>
-                </div>
-              </label>
-
-              <label className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center gap-3 ${
-                isBestSeller ? 'bg-amber-50 border-amber-400 text-amber-800' : 'bg-gray-50 border-gray-200 text-gray-600'
-              }`}>
-                <input
-                  type="checkbox"
-                  checked={isBestSeller}
-                  onChange={(e) => setIsBestSeller(e.target.checked)}
-                  className="w-4 h-4 accent-amber-600"
-                />
-                <div>
-                  <div className="text-xs font-black">🔥 Best Seller</div>
-                  <div className="text-[10px] text-gray-500 font-medium">Highlight under popular items</div>
+                <div className="flex-1">
+                  <div className="text-xs font-black text-gray-900 flex items-center gap-1.5">
+                    <CreditCard className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Online Payment</span>
+                  </div>
+                  <div className="text-[11px] text-gray-500 font-medium mt-0.5">
+                    Allow UPI (PhonePe, GPay), Cards, and NetBanking online payments.
+                  </div>
                 </div>
               </label>
             </div>
+
+            {!isCodAvailable && !isOnlinePaymentAvailable && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-200 font-semibold">
+                ⚠️ Warning: Both payment options are disabled. Customers will not be able to checkout this product.
+              </p>
+            )}
           </div>
 
           {/* Action Buttons */}

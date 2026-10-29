@@ -21,7 +21,8 @@ import {
   Globe,
   Gamepad2,
   Gift,
-  Trophy
+  Trophy,
+  Disc
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useProducts } from '../../context/ProductContext';
@@ -46,10 +47,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { categories } = useCategories();
 
   const [isGameMenuOpen, setIsGameMenuOpen] = useState(true);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const handleAdminLogout = () => {
-    adminLogout();
-    navigate('/admin-login');
+    setShowLogoutConfirm(true);
   };
 
   // Determine active item based on route or activeSection prop
@@ -159,18 +160,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 onClick={() => setIsGameMenuOpen(!isGameMenuOpen)}
                 className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer ${
-                  activeSection === 'catch-the-gift-settings' || activeSection === 'catch-the-gift-scores'
+                  activeSection === 'catch-the-gift-settings' || activeSection === 'catch-the-gift-scores' || activeSection === 'spin-and-win-settings'
                     ? 'bg-[#f0f9e8] text-[#488710] font-extrabold shadow-2xs border border-[#d2ea9d]/60'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Gamepad2 className={`w-4 h-4 ${activeSection === 'catch-the-gift-settings' || activeSection === 'catch-the-gift-scores' ? 'text-[#488710]' : 'text-gray-400'}`} />
+                  <Gamepad2 className={`w-4 h-4 ${activeSection === 'catch-the-gift-settings' || activeSection === 'catch-the-gift-scores' || activeSection === 'spin-and-win-settings' ? 'text-[#488710]' : 'text-gray-400'}`} />
                   <span>Game</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-[#488710]">
-                    2
+                    3
                   </span>
                   <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform duration-200 ${isGameMenuOpen ? 'rotate-180' : ''}`} />
                 </div>
@@ -182,9 +183,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <button
                     onClick={() => {
                       if (setIsMobileSidebarOpen) setIsMobileSidebarOpen(false);
-                      navigate('/admin-dashboard');
+                      navigate('/admin-dashboard?section=catch-the-gift-settings');
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:text-[#488710] hover:bg-[#f0f9e8] transition-all cursor-pointer"
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeSection === 'catch-the-gift-settings'
+                        ? 'bg-[#488710] text-white shadow-xs'
+                        : 'text-gray-600 hover:text-[#488710] hover:bg-[#f0f9e8]'
+                    }`}
                   >
                     <Gift className="w-3.5 h-3.5" />
                     <span>Catch the Gift</span>
@@ -193,12 +198,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <button
                     onClick={() => {
                       if (setIsMobileSidebarOpen) setIsMobileSidebarOpen(false);
-                      navigate('/admin-dashboard');
+                      navigate('/admin-dashboard?section=catch-the-gift-scores');
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:text-[#488710] hover:bg-[#f0f9e8] transition-all cursor-pointer"
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeSection === 'catch-the-gift-scores'
+                        ? 'bg-[#488710] text-white shadow-xs'
+                        : 'text-gray-600 hover:text-[#488710] hover:bg-[#f0f9e8]'
+                    }`}
                   >
                     <Trophy className="w-3.5 h-3.5" />
                     <span>Customer Scores</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (setIsMobileSidebarOpen) setIsMobileSidebarOpen(false);
+                      navigate('/admin-dashboard?section=spin-and-win-settings');
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeSection === 'spin-and-win-settings'
+                        ? 'bg-[#488710] text-white shadow-xs'
+                        : 'text-gray-600 hover:text-[#488710] hover:bg-[#f0f9e8]'
+                    }`}
+                  >
+                    <Disc className="w-3.5 h-3.5" />
+                    <span>Spin and Win</span>
                   </button>
                 </div>
               )}
@@ -226,6 +250,55 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick={() => setIsMobileSidebarOpen && setIsMobileSidebarOpen(false)}
           className="fixed inset-0 z-30 bg-black/40 lg:hidden"
         />
+      )}
+
+      {/* ADMIN LOGOUT CONFIRMATION MODAL */}
+      {showLogoutConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
+          onClick={() => setShowLogoutConfirm(false)}
+        >
+          <div
+            className="relative w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl border border-gray-100 text-center animate-scale-up overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto mb-3 shadow-xs">
+              <LogOut className="w-6 h-6 stroke-[2.2]" />
+            </div>
+
+            <h3 className="text-lg font-black text-gray-900 tracking-tight">
+              Confirm Logout
+            </h3>
+
+            <p className="mt-1.5 text-xs text-gray-500 font-medium leading-relaxed">
+              Are you sure you want to log out from the Admin Portal?
+            </p>
+
+            <div className="mt-5 flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-2.5 px-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-xs transition-all cursor-pointer active:scale-98"
+              >
+                No
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  adminLogout();
+                  navigate('/admin-login');
+                }}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs shadow-md shadow-rose-600/25 transition-all cursor-pointer active:scale-98"
+              >
+                Yes
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

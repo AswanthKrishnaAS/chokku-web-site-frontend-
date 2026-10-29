@@ -23,10 +23,18 @@ export const Shop: React.FC = () => {
     setSearchQuery(searchQueryParam);
   }, [searchQueryParam]);
 
+  const allProducts = storeProducts.length > 0 ? storeProducts : PRODUCTS;
+
+  const maxCatalogPrice = useMemo(() => {
+    if (allProducts.length === 0) return 5000;
+    const maxVal = Math.max(...allProducts.map((p) => p.price || 0));
+    return Math.max(1000, Math.ceil(maxVal / 500) * 500);
+  }, [allProducts]);
+
   const [filters, setFilters] = useState<FilterState>({
     category: searchCategory,
     minPrice: 0,
-    maxPrice: 300,
+    maxPrice: 100000,
     minRating: 0,
     onlyDiscounted: false,
     sortBy: 'popular',
@@ -42,7 +50,7 @@ export const Shop: React.FC = () => {
     setFilters({
       category: 'all',
       minPrice: 0,
-      maxPrice: 300,
+      maxPrice: 100000,
       minRating: 0,
       onlyDiscounted: false,
       sortBy: 'popular',
@@ -52,35 +60,62 @@ export const Shop: React.FC = () => {
   };
 
   // Filter & Sort Logic
-  const allProducts = storeProducts.length > 0 ? storeProducts : PRODUCTS;
   const filteredProducts = useMemo(() => {
     return allProducts.filter((product) => {
       // Category match
-      if (filters.category !== 'all' && product.category !== filters.category) {
-        return false;
+      if (filters.category !== 'all') {
+        const catTarget = storeCategories.find((c) => c.slug === filters.category || c.id === filters.category);
+        const matchesCategory =
+          product.category === filters.category ||
+          (product.categoryName || '').toLowerCase() === filters.category.toLowerCase() ||
+          (catTarget && (
+            product.category === catTarget.slug ||
+            product.category === catTarget.id ||
+            (product.categoryName || '').toLowerCase() === catTarget.name.toLowerCase()
+          ));
+        if (!matchesCategory) return false;
       }
+
       // Price match
       if (product.price < filters.minPrice || product.price > filters.maxPrice) {
         return false;
       }
+
       // Rating match
       if (filters.minRating > 0 && product.rating < filters.minRating) {
         return false;
       }
+
       // Discounted match
       if (filters.onlyDiscounted && product.discountPercent === 0) {
         return false;
       }
-      // Search query match
+
+      // Live Search query match (search by product name, category, keywords, tags, highlights)
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesTitle = product.name.toLowerCase().includes(q);
-        const matchesCategory = product.categoryName.toLowerCase().includes(q);
-        const matchesTags = product.tags?.some((t) => t.toLowerCase().includes(q));
-        if (!matchesTitle && !matchesCategory && !matchesTags) {
+        const q = searchQuery.toLowerCase().trim();
+        const searchWords = q.split(/\s+/).filter(Boolean);
+
+        const searchableContent = [
+          product.name,
+          product.categoryName,
+          product.category,
+          product.description,
+          product.discountTag,
+          ...(Array.isArray(product.tags) ? product.tags : []),
+          ...(Array.isArray(product.highlights) ? product.highlights : []),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+
+        const isExactMatch = searchableContent.includes(q);
+        const isAllWordsMatch = searchWords.every((word) => searchableContent.includes(word));
+        if (!isExactMatch && !isAllWordsMatch) {
           return false;
         }
       }
+
       return true;
     }).sort((a, b) => {
       if (filters.sortBy === 'price-asc') return a.price - b.price;
@@ -88,7 +123,7 @@ export const Shop: React.FC = () => {
       if (filters.sortBy === 'newest') return (b.isNewArrival ? 1 : 0) - (a.isNewArrival ? 1 : 0);
       return b.rating - a.rating; // default 'popular'
     });
-  }, [filters, searchQuery, allProducts]);
+  }, [filters, searchQuery, allProducts, storeCategories]);
 
   return (
     <div className="bg-white min-h-screen py-8">
@@ -169,24 +204,24 @@ export const Shop: React.FC = () => {
             {(filters.category !== 'all' ||
               filters.onlyDiscounted ||
               filters.minRating > 0 ||
-              filters.maxPrice < 300 ||
+              filters.maxPrice < maxCatalogPrice ||
               searchQuery) && (
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <span className="text-xs text-gray-400 font-medium">Active Filters:</span>
                 
                 {filters.category !== 'all' && (
                   <span className="inline-flex items-center gap-1 bg-brand-light-green text-brand-green text-xs font-semibold px-2.5 py-1 rounded-full">
-                    Category: {CATEGORIES.find((c) => c.slug === filters.category)?.name || filters.category}
-                    <button onClick={() => setFilters((p) => ({ ...p, category: 'all' }))}>
+                    Category: {storeCategories.find((c) => c.slug === filters.category || c.id === filters.category)?.name || filters.category}
+                    <button onClick={() => setFilters((p) => ({ ...p, category: 'all' }))} className="cursor-pointer">
                       <X className="w-3 h-3 ml-0.5 hover:text-red-500" />
                     </button>
                   </span>
                 )}
 
-                {filters.maxPrice < 300 && (
+                {filters.maxPrice < maxCatalogPrice && (
                   <span className="inline-flex items-center gap-1 bg-brand-light-blue text-brand-blue text-xs font-semibold px-2.5 py-1 rounded-full">
                     Max Price: ₹{filters.maxPrice}
-                    <button onClick={() => setFilters((p) => ({ ...p, maxPrice: 300 }))}>
+                    <button onClick={() => setFilters((p) => ({ ...p, maxPrice: maxCatalogPrice }))} className="cursor-pointer">
                       <X className="w-3 h-3 ml-0.5 hover:text-red-500" />
                     </button>
                   </span>
@@ -195,7 +230,7 @@ export const Shop: React.FC = () => {
                 {filters.minRating > 0 && (
                   <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 text-xs font-semibold px-2.5 py-1 rounded-full">
                     Rating: {filters.minRating}★+
-                    <button onClick={() => setFilters((p) => ({ ...p, minRating: 0 }))}>
+                    <button onClick={() => setFilters((p) => ({ ...p, minRating: 0 }))} className="cursor-pointer">
                       <X className="w-3 h-3 ml-0.5 hover:text-red-500" />
                     </button>
                   </span>
@@ -204,7 +239,7 @@ export const Shop: React.FC = () => {
                 {filters.onlyDiscounted && (
                   <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full">
                     On Sale Only
-                    <button onClick={() => setFilters((p) => ({ ...p, onlyDiscounted: false }))}>
+                    <button onClick={() => setFilters((p) => ({ ...p, onlyDiscounted: false }))} className="cursor-pointer">
                       <X className="w-3 h-3 ml-0.5 hover:text-red-500" />
                     </button>
                   </span>
@@ -213,7 +248,7 @@ export const Shop: React.FC = () => {
                 {searchQuery && (
                   <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-800 text-xs font-semibold px-2.5 py-1 rounded-full">
                     Search: "{searchQuery}"
-                    <button onClick={() => setSearchQuery('')}>
+                    <button onClick={() => { setSearchQuery(''); setSearchParams({}); }} className="cursor-pointer">
                       <X className="w-3 h-3 ml-0.5 hover:text-red-500" />
                     </button>
                   </span>
@@ -221,7 +256,7 @@ export const Shop: React.FC = () => {
 
                 <button
                   onClick={resetFilters}
-                  className="text-xs text-red-500 font-semibold hover:underline ml-2"
+                  className="text-xs text-red-500 font-semibold hover:underline ml-2 cursor-pointer"
                 >
                   Clear All
                 </button>
@@ -236,19 +271,56 @@ export const Shop: React.FC = () => {
                 ))}
               </div>
             ) : (
-              /* Empty State */
-              <div className="text-center py-16 px-4 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                <Search className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <h3 className="text-lg font-bold text-gray-800">No products match your criteria</h3>
-                <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
-                  Try adjusting your search query, clearing specific price/rating filters, or browsing other category sections.
-                </p>
-                <button
-                  onClick={resetFilters}
-                  className="mt-4 inline-flex items-center gap-2 bg-brand-green text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-brand-green-hover transition-colors shadow-xs"
-                >
-                  Reset All Filters
-                </button>
+              /* Enhanced Empty State for Search & Filters */
+              <div className="text-center py-14 px-6 bg-gray-50/80 rounded-3xl border border-dashed border-gray-200 space-y-4">
+                <div className="w-16 h-16 bg-white rounded-2xl shadow-xs border border-gray-100 flex items-center justify-center mx-auto text-gray-400">
+                  <Search className="w-8 h-8 text-gray-400" />
+                </div>
+
+                <div className="space-y-1.5 max-w-md mx-auto">
+                  <h3 className="text-base sm:text-lg font-black text-gray-900">
+                    {searchQuery
+                      ? `No products found for "${searchQuery}"`
+                      : 'No products match the selected filters'}
+                  </h3>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    {searchQuery
+                      ? 'We couldn’t find any catalog items matching your keywords. Check your spelling, try more general terms, or explore popular categories below.'
+                      : 'Try broadening your filter criteria or resetting filters to browse all catalog items.'}
+                  </p>
+                </div>
+
+                {/* Quick Category Suggestions */}
+                {storeCategories.length > 0 && (
+                  <div className="pt-2">
+                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                      Popular Store Categories
+                    </p>
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      {storeCategories.slice(0, 6).map((cat) => (
+                        <button
+                          key={cat.id || cat.slug}
+                          onClick={() => {
+                            setSearchQuery('');
+                            setFilters((p) => ({ ...p, category: cat.slug }));
+                          }}
+                          className="px-3 py-1.5 bg-white hover:bg-emerald-50 hover:border-[#609f00] text-gray-700 hover:text-[#488710] border border-gray-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                        >
+                          {cat.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2">
+                  <button
+                    onClick={resetFilters}
+                    className="inline-flex items-center gap-2 bg-[#609f00] hover:bg-[#528900] text-white text-xs font-extrabold px-5 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer"
+                  >
+                    <span>View All Products</span>
+                  </button>
+                </div>
               </div>
             )}
 

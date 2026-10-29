@@ -7,7 +7,6 @@ import {
   ChevronUp,
   ShieldCheck,
   Sparkles,
-  Flame,
   Gift,
   Mail,
   Star,
@@ -52,9 +51,22 @@ export const Home: React.FC = () => {
   const allCategories = activeCategories;
   const displayedCategories = showAllCategories ? allCategories : allCategories.slice(0, 4);
 
-  const featuredProducts = storeProducts.filter((p) => p.isFeatured);
-  const newArrivals = storeProducts.filter((p) => p.isNewArrival);
-  const bestSellers = storeProducts.filter((p) => p.isBestSeller);
+  // Best-Selling Products: Displays products based on actual sales data from live orders
+  const bestSellers = [...storeProducts]
+    .sort((a, b) => {
+      const salesA = Number(a.salesCount) || 0;
+      const salesB = Number(b.salesCount) || 0;
+      if (salesB !== salesA) {
+        return salesB - salesA;
+      }
+      if (a.isBestSeller && !b.isBestSeller) return -1;
+      if (!a.isBestSeller && b.isBestSeller) return 1;
+
+      const scoreA = (Number(a.rating) || 5) * (Number(a.reviewCount) || 1);
+      const scoreB = (Number(b.rating) || 5) * (Number(b.reviewCount) || 1);
+      return scoreB - scoreA;
+    })
+    .slice(0, 8);
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,7 +76,8 @@ export const Home: React.FC = () => {
     }
   };
 
-  if (!isServerConnected) {
+  // Only show full-screen blocking error when server is disconnected AND no products are cached
+  if (!isServerConnected && storeProducts.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#f2f9ed] via-[#f7fbf4] to-[#eaf5e3] flex flex-col items-center justify-center p-4 sm:p-8">
         <div className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.08)] border border-emerald-100/60 pt-0 px-6 sm:px-10 pb-8 sm:pb-10 flex flex-col items-center text-center mt-12 sm:mt-16">
@@ -378,67 +391,7 @@ export const Home: React.FC = () => {
         </div>
       </section>
 
-      {/* 5. Featured Products Section */}
-      <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 border border-emerald-100/90 shadow-2xs">
-          <div className="flex items-center justify-between mb-6 pb-3 border-b border-gray-100">
-            <div>
-              <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-black text-[#488710] uppercase tracking-wider bg-[#f0f9e8] px-2.5 py-0.5 rounded-full border border-[#d2ea9d]">
-                <Flame className="w-3 h-3 text-amber-500" />
-                Handpicked Deals
-              </span>
-              <h2 className="text-lg sm:text-2xl font-extrabold text-gray-900 mt-1">
-                Featured Products
-              </h2>
-            </div>
-            <Link
-              to="/shop"
-              className="inline-flex items-center gap-1 text-xs font-bold text-[#488710] hover:text-emerald-700"
-            >
-              <span>See All</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-6">
-            {featuredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 6. New Arrivals Section */}
-      <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 border border-emerald-100/90 shadow-2xs">
-          <div className="flex items-center justify-between mb-6 pb-3 border-b border-gray-100">
-            <div>
-              <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-black text-[#488710] uppercase tracking-wider bg-[#f0f9e8] px-2.5 py-0.5 rounded-full border border-[#d2ea9d]">
-                <Sparkles className="w-3 h-3 text-emerald-600" />
-                Fresh Inventory
-              </span>
-              <h2 className="text-lg sm:text-2xl font-extrabold text-gray-900 mt-1">
-                New Arrivals
-              </h2>
-            </div>
-            <Link
-              to="/shop"
-              className="inline-flex items-center gap-1 text-xs font-bold text-[#488710] hover:text-emerald-700"
-            >
-              <span>Explore New</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-6">
-            {newArrivals.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 7. Best Sellers Section */}
+      {/* 5. Best Sellers Section */}
       <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 border border-emerald-100/90 shadow-2xs">
           <div className="flex items-center justify-between mb-6 pb-3 border-b border-gray-100">
@@ -460,11 +413,17 @@ export const Home: React.FC = () => {
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-6">
-            {bestSellers.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          {bestSellers.length === 0 ? (
+            <div className="text-center py-8 text-gray-500 text-xs sm:text-sm font-medium">
+              No sales data yet. Best-selling products ranked by order volume will appear here.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-6">
+              {bestSellers.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

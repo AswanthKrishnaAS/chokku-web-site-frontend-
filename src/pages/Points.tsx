@@ -17,7 +17,10 @@ import {
   Gift,
   FileText,
   Check,
-  ChevronRight
+  ChevronRight,
+  Disc,
+  ShoppingBag,
+  Filter,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -31,13 +34,30 @@ interface ConversionHistoryItem {
   status: string;
 }
 
+export interface WalletTransactionItem {
+  id: string;
+  type: 'SPIN_AND_WIN' | 'CATCH_THE_GIFT' | 'CONVERSION' | 'PURCHASE_REDEEM' | string;
+  title: string;
+  prize?: string;
+  amount: number;
+  pointsDeducted?: number;
+  unit: 'POINTS' | 'RUPEES';
+  description: string;
+  date: string;
+  status: string;
+}
+
 export const Points: React.FC = () => {
-  const { customerUser, isAuthenticated, customerPoints, fetchCustomerPoints } = useAuth();
+  const { customerUser, isAuthenticated, customerPoints, fetchCustomerPoints, customerWalletBalance } = useAuth();
   const { addToast } = useToast();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
   const [conversions, setConversions] = useState<ConversionHistoryItem[]>([]);
+  const [transactions, setTransactions] = useState<WalletTransactionItem[]>([]);
+  const [totalSpinCoins, setTotalSpinCoins] = useState<number>(0);
+  const [totalCatchPoints, setTotalCatchPoints] = useState<number>(0);
+  const [activeFilter, setActiveFilter] = useState<'ALL' | 'SPIN_AND_WIN' | 'CATCH_THE_GIFT' | 'CONVERSION' | 'PURCHASE_REDEEM'>('ALL');
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -50,7 +70,7 @@ export const Points: React.FC = () => {
     }
   }, [isAuthenticated, customerUser, navigate]);
 
-  // Fetch detailed conversion data from API
+  // Fetch detailed conversion data and wallet transactions from API
   const loadPointsData = async () => {
     setLoading(true);
     try {
@@ -66,7 +86,10 @@ export const Points: React.FC = () => {
 
       if (res.ok && res.isJson && res.data?.success) {
         setConversions(res.data.conversions || []);
+        setTransactions(res.data.transactions || []);
         setWalletBalance(res.data.walletBalance || 0);
+        setTotalSpinCoins(res.data.totalSpinCoins || 0);
+        setTotalCatchPoints(res.data.totalCatchPoints || 0);
         fetchCustomerPoints();
       }
     } catch (err) {
@@ -150,10 +173,42 @@ export const Points: React.FC = () => {
           <div className="w-10 h-10 sm:w-11 sm:h-11" />
         </div>
 
-        {/* 2. TOP 2 METRIC CARDS GRID (SIDE BY SIDE ON MOBILE) */}
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 pt-4">
+        {/* 2. TOP 3 METRIC CARDS GRID */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-4">
           
-          {/* Card 1 (Left): POINTS BALANCE */}
+          {/* Card 1: AVAILABLE STORE CASH */}
+          <div className="bg-gradient-to-b from-[#024430] via-[#046145] to-[#067252] rounded-3xl p-3.5 sm:p-5 text-white shadow-md relative flex flex-col items-center text-center justify-between min-h-[175px] sm:min-h-[190px]">
+            {/* Top Floating Badge Circle */}
+            <div className="w-11 h-11 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center -mt-8 sm:-mt-9 shadow-inner border border-white/30">
+              <div className="w-8 h-8 rounded-full bg-emerald-400 flex items-center justify-center text-white font-black text-sm shadow-xs">
+                <Wallet className="w-4 h-4 text-slate-900" />
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="space-y-0.5 mt-1">
+              <span className="text-[10px] sm:text-xs font-black uppercase text-emerald-200 tracking-wider block">
+                AVAILABLE STORE CASH
+              </span>
+              <p className="text-[9px] sm:text-[11px] text-white/90 font-medium leading-tight max-w-[130px] mx-auto">
+                Ready to redeem on orders
+              </p>
+            </div>
+
+            {/* Big Value */}
+            <div className="my-1">
+              <h2 className="text-2xl sm:text-4xl font-black text-white leading-none tracking-tight">
+                ₹{walletBalance}
+              </h2>
+            </div>
+
+            {/* Bottom Tag Pill */}
+            <div className="bg-black/25 text-white text-[9px] sm:text-[10px] font-bold px-2.5 py-1 rounded-xl w-full flex items-center justify-center gap-1.5 truncate">
+              <span>💳 Min. ₹30 redeemable at Checkout</span>
+            </div>
+          </div>
+
+          {/* Card 2: AVAILABLE POINTS */}
           <div className="bg-gradient-to-b from-[#6ec810] via-[#5db300] to-[#488710] rounded-3xl p-3.5 sm:p-5 text-white shadow-md relative flex flex-col items-center text-center justify-between min-h-[175px] sm:min-h-[190px]">
             {/* Top Floating Badge Circle */}
             <div className="w-11 h-11 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center -mt-8 sm:-mt-9 shadow-inner border border-white/30">
@@ -165,10 +220,10 @@ export const Points: React.FC = () => {
             {/* Content */}
             <div className="space-y-0.5 mt-1">
               <span className="text-[10px] sm:text-xs font-black uppercase text-emerald-100 tracking-wider block">
-                POINTS BALANCE
+                AVAILABLE POINTS
               </span>
               <p className="text-[9px] sm:text-[11px] text-white/90 font-medium leading-tight max-w-[130px] mx-auto">
-                Total points available for conversion
+                Total points earned
               </p>
             </div>
 
@@ -182,16 +237,18 @@ export const Points: React.FC = () => {
 
             {/* Bottom Tag Pill */}
             <div className="bg-black/20 text-white text-[9px] sm:text-[10px] font-bold px-2.5 py-1 rounded-xl w-full flex items-center justify-center gap-1.5 truncate">
-              <span>🎁 Earned by playing Catch the Gift</span>
+              <span>
+                🎮 Spin &amp; Win (🪙{totalSpinCoins.toLocaleString()}) + Catch Game (🎁{totalCatchPoints.toLocaleString()})
+              </span>
             </div>
           </div>
 
-          {/* Card 2 (Right): CONVERTIBLE VALUE */}
+          {/* Card 3: CONVERTIBLE VALUE */}
           <div className="bg-gradient-to-b from-[#ffa300] via-[#ff8800] to-[#f07400] rounded-3xl p-3.5 sm:p-5 text-white shadow-md relative flex flex-col items-center text-center justify-between min-h-[175px] sm:min-h-[190px]">
             {/* Top Floating Badge Circle */}
             <div className="w-11 h-11 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center -mt-8 sm:-mt-9 shadow-inner border border-white/30">
               <div className="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center text-white font-black text-sm shadow-xs">
-                <Wallet className="w-4 h-4 text-white" />
+                <Sparkles className="w-4 h-4 text-white" />
               </div>
             </div>
 
@@ -214,10 +271,39 @@ export const Points: React.FC = () => {
 
             {/* Bottom Tag Pill */}
             <div className="bg-black/20 text-white text-[9px] sm:text-[10px] font-bold px-2.5 py-1 rounded-xl w-full flex items-center justify-center gap-1.5 truncate">
-              <span>📄 Ready to convert to Store Cash</span>
+              <span>📄 Unified wallet for all game rewards</span>
             </div>
           </div>
 
+        </div>
+
+        {/* 2B. POINTS CONVERSION RATE & REDEMPTION HIGHLIGHT BANNER */}
+        <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-emerald-200/90 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-[#488710] flex items-center justify-center text-lg font-black shrink-0 border border-emerald-100">
+              ⚡
+            </div>
+            <div>
+              <div className="flex items-center gap-2 justify-center sm:justify-start flex-wrap">
+                <span className="text-xs sm:text-sm font-black text-gray-900">
+                  Unified Conversion Rate:
+                </span>
+                <span className="text-xs sm:text-sm font-black text-[#488710] bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
+                  1,000 Points = ₹1 Store Cash
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
+                Coins won in Spin &amp; Win and Catch the Gift combine into one wallet. Convert to Store Cash here, then redeem at Checkout (Min. ₹30 threshold).
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/shop"
+            className="bg-[#488710] hover:bg-[#386b0c] text-white text-xs font-black px-4 py-2 rounded-xl transition-all shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5 hover:scale-105 active:scale-95"
+          >
+            <span>Redeem in Shop</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
 
         {/* 3. POINTS CONVERSION RULE CONTAINER CARD */}
@@ -232,7 +318,7 @@ export const Points: React.FC = () => {
               <div>
                 <h3 className="text-sm sm:text-base font-black text-gray-900 leading-tight">Points Conversion Rule</h3>
                 <p className="text-[10px] sm:text-xs text-gray-400 font-medium">
-                  Convert your earned points into store cash instantly!
+                  Convert your accumulated game coins into store cash instantly!
                 </p>
               </div>
             </div>
@@ -315,105 +401,248 @@ export const Points: React.FC = () => {
                 i
               </div>
               <span className="leading-snug">
-                You need at least 1,000 Points to make a conversion.<br className="hidden sm:inline" /> Play Catch the Gift to earn points!
+                You need at least 1,000 Points to convert into Store Cash.<br className="hidden sm:inline" /> Play Spin &amp; Win or Catch the Gift to earn more points!
               </span>
             </div>
           )}
 
         </div>
 
-        {/* 4. CONVERSION HISTORY CONTAINER CARD */}
+        {/* 4. UNIFIED WALLET & TRANSACTION HISTORY CONTAINER CARD */}
         <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-sm border border-gray-100/90 space-y-4">
           
-          <div className="flex items-center justify-between border-b border-gray-100/60 pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100/60 pb-3">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-full bg-[#5db300] text-white flex items-center justify-center shrink-0 shadow-2xs">
                 <Clock className="w-4 h-4 text-white" />
               </div>
-              <h3 className="text-sm sm:text-base font-black text-gray-900">Conversion History</h3>
+              <div>
+                <h3 className="text-sm sm:text-base font-black text-gray-900 leading-tight">
+                  Wallet &amp; Transaction History
+                </h3>
+                <p className="text-[10px] sm:text-xs text-gray-400 font-medium">
+                  Complete audit log of Spin &amp; Win coins, game scores, and cash conversions
+                </p>
+              </div>
             </div>
 
-            <span className="bg-[#e8f8e0] text-[#386b0c] text-[10px] sm:text-xs font-black px-3 py-1 rounded-full border border-[#d2f0c0]">
-              {conversions.length} Converted
+            <span className="bg-[#e8f8e0] text-[#386b0c] text-[10px] sm:text-xs font-black px-3 py-1 rounded-full border border-[#d2f0c0] self-start sm:self-auto">
+              {transactions.length} Total Records
             </span>
           </div>
 
-          {conversions.length === 0 ? (
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            <button
+              onClick={() => setActiveFilter('ALL')}
+              className={`px-3 py-1.5 rounded-xl font-extrabold text-[11px] transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeFilter === 'ALL'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+              }`}
+            >
+              All ({transactions.length})
+            </button>
+            <button
+              onClick={() => setActiveFilter('SPIN_AND_WIN')}
+              className={`px-3 py-1.5 rounded-xl font-extrabold text-[11px] transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1 ${
+                activeFilter === 'SPIN_AND_WIN'
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/60'
+              }`}
+            >
+              <span>🪙 Spin &amp; Win</span>
+              <span>({transactions.filter((t) => t.type === 'SPIN_AND_WIN').length})</span>
+            </button>
+            <button
+              onClick={() => setActiveFilter('CATCH_THE_GIFT')}
+              className={`px-3 py-1.5 rounded-xl font-extrabold text-[11px] transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1 ${
+                activeFilter === 'CATCH_THE_GIFT'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/60'
+              }`}
+            >
+              <span>🎁 Catch Game</span>
+              <span>({transactions.filter((t) => t.type === 'CATCH_THE_GIFT').length})</span>
+            </button>
+            <button
+              onClick={() => setActiveFilter('CONVERSION')}
+              className={`px-3 py-1.5 rounded-xl font-extrabold text-[11px] transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1 ${
+                activeFilter === 'CONVERSION'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200/60'
+              }`}
+            >
+              <span>💳 Conversions</span>
+              <span>({transactions.filter((t) => t.type === 'CONVERSION').length})</span>
+            </button>
+            <button
+              onClick={() => setActiveFilter('PURCHASE_REDEEM')}
+              className={`px-3 py-1.5 rounded-xl font-extrabold text-[11px] transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1 ${
+                activeFilter === 'PURCHASE_REDEEM'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200/60'
+              }`}
+            >
+              <span>🛍️ Store Cash Spent</span>
+              <span>({transactions.filter((t) => t.type === 'PURCHASE_REDEEM').length})</span>
+            </button>
+          </div>
+
+          {/* Transactions List */}
+          {transactions.filter((t) => activeFilter === 'ALL' || t.type === activeFilter).length === 0 ? (
             <div className="py-8 text-center text-gray-400 space-y-2">
               <div className="w-16 h-16 bg-[#eef8ea] text-[#5db300] rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-inner">
-                📦
+                🪙
               </div>
-              <h4 className="text-sm font-black text-gray-900 pt-1">No Conversions Yet</h4>
+              <h4 className="text-sm font-black text-gray-900 pt-1">No Activity in this Category</h4>
               <p className="text-xs text-gray-400 max-w-xs mx-auto leading-relaxed">
-                Your points conversion history will appear here once you convert points.
+                Play Spin &amp; Win or Catch the Gift to collect coins and earn store cash!
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
-              {conversions.map((conv, idx) => (
-                <div key={conv._id || idx} className="py-3 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-emerald-100 text-[#488710] flex items-center justify-center font-black">
-                      <Check className="w-4 h-4 text-[#488710]" />
-                    </div>
-                    <div>
-                      <p className="font-extrabold text-gray-900">
-                        Converted {conv.pointsConverted.toLocaleString()} Points
-                      </p>
-                      <p className="text-[10px] text-gray-400 font-medium">
-                        {conv.convertedAt ? new Date(conv.convertedAt).toLocaleString() : 'Recent'}
-                      </p>
-                    </div>
-                  </div>
+            <div className="divide-y divide-gray-100 max-h-[380px] overflow-y-auto pr-1">
+              {transactions
+                .filter((t) => activeFilter === 'ALL' || t.type === activeFilter)
+                .map((tx) => {
+                  const isSpin = tx.type === 'SPIN_AND_WIN';
+                  const isCatch = tx.type === 'CATCH_THE_GIFT';
+                  const isConversion = tx.type === 'CONVERSION';
+                  const isRedeem = tx.type === 'PURCHASE_REDEEM';
 
-                  <div className="text-right">
-                    <span className="text-sm font-black text-[#488710] block">
-                      +₹{conv.rupeesEarned}
-                    </span>
-                    <span className="text-[9px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
-                      {conv.status || 'COMPLETED'}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                  return (
+                    <div key={tx.id} className="py-3.5 flex items-center justify-between gap-3 text-xs">
+                      {/* Left Icon & Details */}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 font-black shadow-2xs ${
+                            isSpin
+                              ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white'
+                              : isCatch
+                              ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 text-white'
+                              : isConversion
+                              ? 'bg-gradient-to-br from-purple-500 to-indigo-600 text-white'
+                              : 'bg-gradient-to-br from-rose-500 to-rose-700 text-white'
+                          }`}
+                        >
+                          {isSpin ? (
+                            <Disc className="w-4 h-4 text-white" />
+                          ) : isCatch ? (
+                            <Gift className="w-4 h-4 text-white" />
+                          ) : isConversion ? (
+                            <RefreshCw className="w-4 h-4 text-white" />
+                          ) : (
+                            <ShoppingBag className="w-4 h-4 text-white" />
+                          )}
+                        </div>
+
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-extrabold text-gray-900 text-xs sm:text-sm truncate">
+                              {tx.title}
+                            </p>
+                            <span
+                              className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                isSpin
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                                  : isCatch
+                                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                                  : isConversion
+                                  ? 'bg-purple-100 text-purple-900 border border-purple-200'
+                                  : 'bg-rose-100 text-rose-900 border border-rose-200'
+                              }`}
+                            >
+                              {isSpin
+                                ? 'Spin & Win'
+                                : isCatch
+                                ? 'Catch Game'
+                                : isConversion
+                                ? 'Conversion'
+                                : 'Redeemed'}
+                            </span>
+                          </div>
+
+                          <p className="text-[11px] text-gray-500 truncate leading-snug">
+                            {tx.description || tx.prize}
+                          </p>
+                          <p className="text-[10px] text-gray-400 font-medium">
+                            {tx.date ? new Date(tx.date).toLocaleString() : 'Recent'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Right Amount & Status */}
+                      <div className="text-right shrink-0">
+                        <span
+                          className={`text-xs sm:text-sm font-black block ${
+                            isRedeem
+                              ? 'text-rose-600 font-mono'
+                              : isConversion
+                              ? 'text-emerald-700 font-mono'
+                              : isSpin
+                              ? 'text-amber-600 font-mono'
+                              : 'text-[#488710] font-mono'
+                          }`}
+                        >
+                          {isRedeem
+                            ? `-₹${Math.abs(tx.amount)}`
+                            : isConversion
+                            ? `+₹${tx.amount} Cash`
+                            : `+${tx.amount.toLocaleString()} Coins`}
+                        </span>
+                        <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                          {tx.status || 'COMPLETED'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           )}
 
         </div>
 
-        {/* 5. "WANT MORE POINTS?" PROMO BANNER CARD */}
-        <div className="bg-gradient-to-r from-[#033c3a] via-[#054a48] to-[#075956] rounded-3xl p-4 sm:p-5 text-white shadow-md flex items-center justify-between gap-3 relative overflow-hidden">
+        {/* 5. "WANT MORE POINTS?" PROMO BANNER CARD WITH DUAL GAME LINKS */}
+        <div className="bg-gradient-to-r from-[#033c3a] via-[#054a48] to-[#075956] rounded-3xl p-4 sm:p-5 text-white shadow-md flex flex-col sm:flex-row items-center justify-between gap-4 relative overflow-hidden">
           {/* Subtle Glow Background Overlay */}
           <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-400/10 rounded-full blur-2xl pointer-events-none" />
 
           {/* Left Graphic & Text Group */}
-          <div className="flex items-center gap-3 min-w-0">
-            {/* 3D Game / Gift Emoji Cluster */}
+          <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto text-center sm:text-left justify-center sm:justify-start">
             <div className="relative shrink-0 flex items-center justify-center w-12 sm:w-16 h-12 sm:h-16">
               <span className="text-2xl sm:text-3xl filter drop-shadow-md">🎮</span>
-              <span className="text-xl sm:text-2xl absolute -top-1 -right-1 filter drop-shadow-md">🎁</span>
+              <span className="text-xl sm:text-2xl absolute -top-1 -right-1 filter drop-shadow-md">🎡</span>
               <span className="text-xs absolute -bottom-1 -left-1">🪙</span>
             </div>
 
-            {/* Title & Subtitle */}
             <div className="space-y-0.5 min-w-0">
-              <h3 className="text-sm sm:text-base font-black text-white leading-tight truncate">
-                Want more points?
+              <h3 className="text-sm sm:text-base font-black text-white leading-tight">
+                Want to earn more coins &amp; store cash?
               </h3>
               <p className="text-[10px] sm:text-xs text-emerald-100/90 font-medium leading-snug">
-                Play Catch the Gift and collect amazing rewards!
+                Spin the Lucky Wheel or play Catch the Gift to collect coins!
               </p>
             </div>
           </div>
 
-          {/* Right Play Now Button */}
-          <Link
-            to="/play-and-win"
-            className="inline-flex items-center gap-1.5 bg-white hover:bg-emerald-50 text-[#054a48] px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full text-xs sm:text-sm font-black shadow-md transition-all hover:scale-105 active:scale-95 shrink-0 border border-emerald-100 cursor-pointer"
-          >
-            <span>Play Now</span>
-            <ChevronRight className="w-4 h-4 text-[#054a48] stroke-[3]" />
-          </Link>
+          {/* Right Dual Action Buttons */}
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-center">
+            <Link
+              to="/spin-and-win"
+              className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-amber-950 px-3.5 py-2 rounded-full text-xs font-black shadow-md transition-all hover:scale-105 active:scale-95 shrink-0 cursor-pointer"
+            >
+              <span>🪙 Spin &amp; Win</span>
+              <ChevronRight className="w-3.5 h-3.5 stroke-[3]" />
+            </Link>
+
+            <Link
+              to="/play-and-win"
+              className="inline-flex items-center justify-center gap-1.5 bg-white hover:bg-emerald-50 text-[#054a48] px-3.5 py-2 rounded-full text-xs font-black shadow-md transition-all hover:scale-105 active:scale-95 shrink-0 border border-emerald-100 cursor-pointer"
+            >
+              <span>🎁 Catch Game</span>
+              <ChevronRight className="w-3.5 h-3.5 text-[#054a48] stroke-[3]" />
+            </Link>
+          </div>
         </div>
 
       </div>

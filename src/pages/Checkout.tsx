@@ -25,6 +25,9 @@ import {
   Truck,
   Sparkles,
   Zap,
+  Wallet,
+  AlertCircle,
+  Coins,
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
@@ -64,9 +67,22 @@ export const Checkout: React.FC = () => {
     removeCoupon,
   } = useCart();
 
-  const { user, addOrder, savedAddresses, addSavedAddress, deleteSavedAddress, fetchSavedAddresses } = useAuth();
+  const {
+    user,
+    addOrder,
+    savedAddresses,
+    addSavedAddress,
+    deleteSavedAddress,
+    fetchSavedAddresses,
+    customerPoints,
+    customerWalletBalance,
+    fetchCustomerPoints,
+  } = useAuth();
   const { addToast } = useToast();
   const navigate = useNavigate();
+
+  // Store Cash redemption toggle state
+  const [useStoreCash, setUseStoreCash] = useState<boolean>(false);
 
   // Active items for checkout:
   // In Buy Now mode: only buyNowItem (isolated from cart)
@@ -98,6 +114,26 @@ export const Checkout: React.FC = () => {
   // Payment Method Selection: 'cod' or 'online'
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'online'>('cod');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Check supported payment methods based on checkout items
+  const isCodSupported = useMemo(() => {
+    if (checkoutItems.length === 0) return true;
+    return checkoutItems.every((item) => item.product?.isCodAvailable !== false);
+  }, [checkoutItems]);
+
+  const isOnlineSupported = useMemo(() => {
+    if (checkoutItems.length === 0) return true;
+    return checkoutItems.every((item) => item.product?.isOnlinePaymentAvailable !== false);
+  }, [checkoutItems]);
+
+  // Auto-switch selected payment method if current method is not supported
+  useEffect(() => {
+    if (paymentMethod === 'cod' && !isCodSupported && isOnlineSupported) {
+      setPaymentMethod('online');
+    } else if (paymentMethod === 'online' && !isOnlineSupported && isCodSupported) {
+      setPaymentMethod('cod');
+    }
+  }, [isCodSupported, isOnlineSupported, paymentMethod]);
 
   // UI state for Order Summary expansion (if > 3 items)
   const [showAllItems, setShowAllItems] = useState(false);
@@ -196,6 +232,11 @@ export const Checkout: React.FC = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    if (name === 'phone') {
+      const digitsOnly = value.replace(/\D/g, '').slice(0, 10);
+      setFormData((prev) => ({ ...prev, phone: digitsOnly }));
+      return;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (name === 'pincode') {
       handlePincodeLookup(value);
@@ -225,6 +266,11 @@ export const Checkout: React.FC = () => {
     e.preventDefault();
     if (!editingAddress) return;
 
+    if (editingAddress.phone.replace(/\D/g, '').length !== 10) {
+      addToast('Invalid Phone Number', 'Please enter a valid 10-digit mobile number.', 'error');
+      return;
+    }
+
     await addSavedAddress({
       fullName: editingAddress.fullName,
       email: editingAddress.email,
@@ -253,6 +299,10 @@ export const Checkout: React.FC = () => {
   const handleSaveNewAddressAndSelect = async () => {
     if (!formData.fullName || !formData.email || !formData.phone || !formData.address || !formData.pincode) {
       addToast('Incomplete Address', 'Please fill in all address fields before saving.', 'error');
+      return;
+    }
+    if (formData.phone.replace(/\D/g, '').length !== 10) {
+      addToast('Invalid Phone Number', 'Please enter a valid 10-digit mobile number.', 'error');
       return;
     }
     const res = await addSavedAddress({
@@ -321,9 +371,23 @@ export const Checkout: React.FC = () => {
     return 0;
   }, [checkoutSubtotal, couponCode]);
 
+  // Available Store Cash & Points
+  const availableStoreCash = Number(customerWalletBalance || (user as any)?.walletBalance || 0);
+  const availablePoints = Number(customerPoints || 0);
+  const convertibleValue = Math.floor(availablePoints / 1000);
+
+  // Maximum Store Cash that can be applied to product price
+  const eligibleStoreCash = useMemo(() => {
+    return Math.min(availableStoreCash, Math.floor(checkoutSubtotal));
+  }, [availableStoreCash, checkoutSubtotal]);
+
+  // Minimum Redemption Rule: Customers can redeem Store Cash only when amount applied is ₹30 or more.
+  const isRedemptionEligible = eligibleStoreCash >= 30;
+  const appliedStoreCash = (useStoreCash && isRedemptionEligible) ? eligibleStoreCash : 0;
+
   const checkoutTotalSavings = useMemo(() => {
-    return checkoutProductDiscount + checkoutCouponDiscount;
-  }, [checkoutProductDiscount, checkoutCouponDiscount]);
+    return checkoutProductDiscount + checkoutCouponDiscount + appliedStoreCash;
+  }, [checkoutProductDiscount, checkoutCouponDiscount, appliedStoreCash]);
 
   const checkoutDeliveryFee = useMemo(() => {
     if (checkoutSubtotal === 0) return 0;
@@ -331,8 +395,8 @@ export const Checkout: React.FC = () => {
   }, [checkoutSubtotal]);
 
   const checkoutTotalAmount = useMemo(() => {
-    return Math.max(0, checkoutSubtotal - checkoutCouponDiscount + checkoutDeliveryFee);
-  }, [checkoutSubtotal, checkoutCouponDiscount, checkoutDeliveryFee]);
+    return Math.max(0, checkoutSubtotal - appliedStoreCash - checkoutCouponDiscount + checkoutDeliveryFee);
+  }, [checkoutSubtotal, appliedStoreCash, checkoutCouponDiscount, checkoutDeliveryFee]);
 
   // Handle coupon apply
   const handleApplyCouponCode = (codeToApply?: string) => {
@@ -353,6 +417,27 @@ export const Checkout: React.FC = () => {
     if (!formData.fullName || !formData.email || !formData.phone || !formData.address || !formData.city || !formData.pincode) {
       addToast('Incomplete Address', 'Please fill in all required shipping and contact details.', 'error');
       setIsAddingNewAddress(true);
+      return;
+    }
+
+    if (formData.phone.replace(/\D/g, '').length !== 10) {
+      addToast('Invalid Phone Number', 'Please enter a valid 10-digit mobile number.', 'error');
+      setIsAddingNewAddress(true);
+      return;
+    }
+
+    if (paymentMethod === 'cod' && !isCodSupported) {
+      addToast('Payment Error', 'Cash on Delivery is not available for the selected product.', 'error');
+      return;
+    }
+
+    if (paymentMethod === 'online' && !isOnlineSupported) {
+      addToast('Payment Error', 'Online payment is not available for the selected product.', 'error');
+      return;
+    }
+
+    if (!isCodSupported && !isOnlineSupported) {
+      addToast('Payment Error', 'No payment method is enabled for this product.', 'error');
       return;
     }
 
@@ -386,6 +471,7 @@ export const Checkout: React.FC = () => {
       })),
       subtotal: checkoutSubtotal,
       discount: checkoutTotalSavings,
+      storeCashApplied: appliedStoreCash,
       deliveryFee: checkoutDeliveryFee,
       totalAmount: checkoutTotalAmount,
       shippingAddress: { ...formData },
@@ -415,6 +501,7 @@ export const Checkout: React.FC = () => {
             items: [...checkoutItems],
             subtotal: checkoutSubtotal,
             discount: checkoutTotalSavings,
+            storeCashApplied: appliedStoreCash,
             deliveryFee: checkoutDeliveryFee,
             totalAmount: checkoutTotalAmount,
             status: 'Processing',
@@ -428,6 +515,7 @@ export const Checkout: React.FC = () => {
           setSuccessOrder(newOrder);
           setShowSuccessModal(true);
           setIsSubmitting(false);
+          fetchCustomerPoints();
 
           if (isBuyNow) {
             clearBuyNow();
@@ -448,6 +536,7 @@ export const Checkout: React.FC = () => {
           items: [...checkoutItems],
           subtotal: checkoutSubtotal,
           discount: checkoutTotalSavings,
+          storeCashApplied: appliedStoreCash,
           deliveryFee: checkoutDeliveryFee,
           totalAmount: checkoutTotalAmount,
           status: 'Processing',
@@ -461,6 +550,7 @@ export const Checkout: React.FC = () => {
         setSuccessOrder(fallbackOrder);
         setShowSuccessModal(true);
         setIsSubmitting(false);
+        fetchCustomerPoints();
 
         if (isBuyNow) {
           clearBuyNow();
@@ -522,6 +612,7 @@ export const Checkout: React.FC = () => {
                 items: [...checkoutItems],
                 subtotal: checkoutSubtotal,
                 discount: checkoutTotalSavings,
+                storeCashApplied: appliedStoreCash,
                 deliveryFee: checkoutDeliveryFee,
                 totalAmount: checkoutTotalAmount,
                 status: 'Processing',
@@ -538,6 +629,7 @@ export const Checkout: React.FC = () => {
               setSuccessOrder(newOrder);
               setShowSuccessModal(true);
               setIsSubmitting(false);
+              fetchCustomerPoints();
 
               if (isBuyNow) {
                 clearBuyNow();
@@ -892,13 +984,182 @@ export const Checkout: React.FC = () => {
           </section>
 
           {/* ========================================================= */}
-          {/* SECTION 2: PRICE DETAILS                                 */}
+          {/* SECTION 2: STORE CASH REDEMPTION (BUY NOW & CHECKOUT)     */}
+          {/* ========================================================= */}
+          <section className="bg-white rounded-2xl border border-gray-200/90 p-4 sm:p-5 shadow-xs space-y-3.5 transition-all">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100 flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-full bg-[#64A901] text-white font-extrabold flex items-center justify-center text-xs shadow-xs">
+                  2
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-extrabold text-gray-900">
+                      {isBuyNow ? 'Buy Now Store Cash' : 'Store Cash Redemption'}
+                    </h2>
+                    {isBuyNow && (
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
+                        Buy Now
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-500">Apply your available store cash balance to this order</p>
+                </div>
+              </div>
+              <span className="text-[11px] font-extrabold text-[#488710] bg-[#eef8ea] border border-[#d8f2c8] px-2.5 py-1 rounded-full flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-[#64A901]" />
+                <span>1,000 Points = ₹1 Store Cash</span>
+              </span>
+            </div>
+
+            {/* Points & Store Cash Balance Summary Cards (3 items) */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 text-center">
+              {/* Metric 1: Available Store Cash */}
+              <div className="bg-[#f4fbf0] border border-[#d8f2c8] rounded-xl p-2.5 sm:p-3 flex flex-col items-center justify-center">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#386b0c] block">
+                  Available Store Cash
+                </span>
+                <span className="text-base sm:text-xl font-black text-gray-900 mt-0.5">
+                  ₹{availableStoreCash}
+                </span>
+                <span className="text-[9px] text-[#488710] font-bold block mt-0.5">
+                  Balance
+                </span>
+              </div>
+
+              {/* Metric 2: Available Points */}
+              <div className="bg-[#f4fbf0] border border-[#d8f2c8] rounded-xl p-2.5 sm:p-3 flex flex-col items-center justify-center">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-gray-600 block">
+                  Available Points
+                </span>
+                <span className="text-base sm:text-xl font-black text-gray-900 mt-0.5">
+                  {availablePoints.toLocaleString()}
+                </span>
+                <span className="text-[9px] text-gray-500 font-bold block mt-0.5">
+                  PTS
+                </span>
+              </div>
+
+              {/* Metric 3: Convertible Value */}
+              <div className="bg-[#f4fbf0] border border-[#d8f2c8] rounded-xl p-2.5 sm:p-3 flex flex-col items-center justify-center">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 block">
+                  Convertible Value
+                </span>
+                <span className="text-base sm:text-xl font-black text-amber-600 mt-0.5">
+                  ₹{convertibleValue}
+                </span>
+                <span className="text-[9px] text-amber-700 font-bold block mt-0.5">
+                  1,000 PTS = ₹1
+                </span>
+              </div>
+            </div>
+
+            {/* Toggle & Redemption Control */}
+            <div className={`p-3.5 sm:p-4 rounded-xl border transition-all ${
+              useStoreCash && isRedemptionEligible
+                ? 'border-[#64A901] bg-[#f8fbf4] ring-2 ring-[#64A901]/15'
+                : isRedemptionEligible
+                ? 'border-gray-200 bg-white hover:border-gray-300'
+                : 'border-gray-200 bg-gray-50/70'
+            }`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  {/* Toggle Switch */}
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      id="use-store-cash-checkbox"
+                      checked={useStoreCash && isRedemptionEligible}
+                      disabled={!isRedemptionEligible}
+                      onChange={(e) => {
+                        if (isRedemptionEligible) {
+                          setUseStoreCash(e.target.checked);
+                        }
+                      }}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#64A901] peer-disabled:opacity-40 peer-disabled:cursor-not-allowed"></div>
+                  </label>
+
+                  <div>
+                    <label
+                      htmlFor="use-store-cash-checkbox"
+                      className={`text-xs sm:text-sm font-black ${
+                        isRedemptionEligible ? 'text-gray-900 cursor-pointer' : 'text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      Use Store Cash
+                    </label>
+                    <p className="text-[11px] text-gray-500">
+                      {isRedemptionEligible
+                        ? `Amount to Apply: ₹${eligibleStoreCash} (Deducted from product price)`
+                        : `Amount to Apply: ₹${eligibleStoreCash}`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <span className={`text-sm sm:text-base font-black ${
+                    isRedemptionEligible ? 'text-[#488710]' : 'text-gray-400'
+                  }`}>
+                    ₹{eligibleStoreCash}
+                  </span>
+                  <span className="block text-[9px] uppercase tracking-wider text-gray-400 font-bold">
+                    Eligible
+                  </span>
+                </div>
+              </div>
+
+              {/* Message: Minimum Redemption Requirement Rule (when eligibleStoreCash < 30) */}
+              {!isRedemptionEligible && (
+                <div className="mt-3 pt-3 border-t border-gray-200/80">
+                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-200/90 rounded-xl p-2.5 sm:p-3 text-xs text-amber-900">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="font-extrabold text-amber-900 leading-tight">
+                        Minimum Redemption Requirement: ₹30
+                      </p>
+                      <p className="text-[11px] text-amber-800 leading-snug">
+                        Customers can redeem Store Cash only when the amount applied is <strong>₹30 or more</strong>. Your eligible amount for this order is <strong>₹{eligibleStoreCash}</strong> (Available Store Cash: ₹{availableStoreCash}).
+                      </p>
+                      <div className="pt-1 flex items-center gap-1.5 text-[11px] flex-wrap">
+                        <span className="text-amber-900 font-medium">Want to earn or convert more?</span>
+                        <Link
+                          to="/points"
+                          className="font-black text-amber-950 underline hover:text-black inline-flex items-center gap-0.5"
+                        >
+                          <span>Go to Points (1,000 Pts = ₹1)</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Active Confirmation Banner when Enabled */}
+              {useStoreCash && isRedemptionEligible && (
+                <div className="mt-3 pt-3 border-t border-emerald-100 flex items-center justify-between gap-2 text-xs text-emerald-900">
+                  <span className="font-extrabold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-[#64A901] shrink-0" />
+                    <span>₹{eligibleStoreCash} Store Cash applied to this order!</span>
+                  </span>
+                  <span className="text-[10px] font-black text-[#64A901] bg-white px-2 py-0.5 rounded-md border border-emerald-200">
+                    -₹{eligibleStoreCash} Off
+                  </span>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ========================================================= */}
+          {/* SECTION 3: PRICE DETAILS                                 */}
           {/* ========================================================= */}
           <section className="bg-white rounded-2xl border border-gray-200/90 p-4 sm:p-5 shadow-xs space-y-3.5">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-full bg-[#64A901] text-white font-extrabold flex items-center justify-center text-xs shadow-xs">
-                  2
+                  3
                 </div>
                 <div>
                   <h2 className="text-base font-extrabold text-gray-900">Price Details</h2>
@@ -912,13 +1173,21 @@ export const Checkout: React.FC = () => {
 
             {/* Clear breakdown list */}
             <div className="space-y-2.5 text-xs sm:text-sm">
-              {/* Original Price */}
+              {/* Product Price (Total Subtotal) */}
               <div className="flex items-center justify-between text-gray-600">
-                <span className="font-medium">Original Price (Total MRP)</span>
-                <span className="font-semibold text-gray-800">₹{checkoutTotalOriginalPrice.toFixed(2)}</span>
+                <span className="font-medium">Product Price</span>
+                <span className="font-semibold text-gray-800">₹{checkoutSubtotal.toFixed(2)}</span>
               </div>
 
-              {/* Discount Amount */}
+              {/* Original Price */}
+              {checkoutTotalOriginalPrice > checkoutSubtotal && (
+                <div className="flex items-center justify-between text-gray-400 text-xs">
+                  <span>Total MRP</span>
+                  <span className="line-through">₹{checkoutTotalOriginalPrice.toFixed(2)}</span>
+                </div>
+              )}
+
+              {/* Discount Amount on MRP */}
               {checkoutProductDiscount > 0 && (
                 <div className="flex items-center justify-between text-[#64A901]">
                   <span className="font-medium flex items-center gap-1">
@@ -926,6 +1195,20 @@ export const Checkout: React.FC = () => {
                     <span>Discount on MRP</span>
                   </span>
                   <span className="font-extrabold">-₹{checkoutProductDiscount.toFixed(2)}</span>
+                </div>
+              )}
+
+              {/* Store Cash Applied Row */}
+              {appliedStoreCash > 0 && (
+                <div className="flex items-center justify-between text-[#488710] bg-emerald-50/80 px-3 py-2 rounded-xl border border-emerald-200">
+                  <div className="flex items-center gap-1.5 font-extrabold">
+                    <Wallet className="w-3.5 h-3.5 text-[#64A901]" />
+                    <span>Store Cash Applied</span>
+                    <span className="text-[10px] font-black text-[#488710] bg-white px-2 py-0.5 rounded-md border border-emerald-200">
+                      1,000 PTS = ₹1
+                    </span>
+                  </div>
+                  <span className="font-extrabold text-sm">-₹{appliedStoreCash.toFixed(2)}</span>
                 </div>
               )}
 
@@ -963,6 +1246,27 @@ export const Checkout: React.FC = () => {
                   )}
                 </span>
               </div>
+
+              {/* Price Calculation Box matching Prompt Example */}
+              {appliedStoreCash > 0 && (
+                <div className="p-3 bg-gray-50 border border-gray-200/80 rounded-xl space-y-1.5 text-xs mt-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-1">
+                    Price Calculation
+                  </span>
+                  <div className="flex items-center justify-between text-gray-700 font-semibold">
+                    <span>Product Price</span>
+                    <span>₹{checkoutSubtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[#488710] font-black">
+                    <span>Store Cash Applied</span>
+                    <span>-₹{appliedStoreCash.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-gray-900 font-black pt-1 border-t border-gray-200">
+                    <span>Total (Price after Store Cash)</span>
+                    <span>₹{Math.max(0, checkoutSubtotal - appliedStoreCash).toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
 
               {/* Divider */}
               <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
@@ -1037,13 +1341,13 @@ export const Checkout: React.FC = () => {
           </section>
 
           {/* ========================================================= */}
-          {/* SECTION 3: DELIVERY ADDRESS                              */}
+          {/* SECTION 4: DELIVERY ADDRESS                              */}
           {/* ========================================================= */}
           <section className="bg-white rounded-2xl border border-gray-200/90 p-4 sm:p-5 shadow-xs space-y-3.5">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-full bg-[#64A901] text-white font-extrabold flex items-center justify-center text-xs shadow-xs">
-                  3
+                  4
                 </div>
                 <div>
                   <h2 className="text-base font-extrabold text-gray-900">Delivery Address</h2>
@@ -1262,14 +1566,22 @@ export const Checkout: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block font-bold text-gray-700 mb-1">Phone Number *</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-bold text-gray-700">Phone Number *</label>
+                      <span className={`text-[10px] font-bold ${formData.phone.length === 10 ? 'text-[#488710]' : 'text-gray-400'}`}>
+                        {formData.phone.length}/10 digits
+                      </span>
+                    </div>
                     <input
                       type="tel"
                       name="phone"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={10}
                       required
                       value={formData.phone}
                       onChange={handleInputChange}
-                      placeholder="+91 9876543210"
+                      placeholder="10-digit mobile number"
                       className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white"
                     />
                   </div>
@@ -1369,13 +1681,13 @@ export const Checkout: React.FC = () => {
           </section>
 
           {/* ========================================================= */}
-          {/* SECTION 4: PAYMENT METHOD                                */}
+          {/* SECTION 5: PAYMENT METHOD                                */}
           {/* ========================================================= */}
           <section className="bg-white rounded-2xl border border-gray-200/90 p-4 sm:p-5 shadow-xs space-y-3.5">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-full bg-[#64A901] text-white font-extrabold flex items-center justify-center text-xs shadow-xs">
-                  4
+                  5
                 </div>
                 <div>
                   <h2 className="text-base font-extrabold text-gray-900">Payment Method</h2>
@@ -1388,108 +1700,130 @@ export const Checkout: React.FC = () => {
               </span>
             </div>
 
-            {/* Payment Options Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Option 1: Cash on Delivery (COD) */}
-              <div
-                id="payment-option-cod"
-                onClick={() => setPaymentMethod('cod')}
-                className={`p-4 rounded-xl border transition-all cursor-pointer relative flex items-start gap-3 ${
-                  paymentMethod === 'cod'
-                    ? 'border-[#64A901] bg-[#f8fbf4] ring-2 ring-[#64A901]/15 shadow-xs'
-                    : 'border-gray-200 bg-white hover:border-gray-300'
-                }`}
-              >
-                <div className="mt-0.5 shrink-0">
-                  <input
-                    type="radio"
-                    id="payment-cod"
-                    name="paymentMethodSelection"
-                    value="cod"
-                    checked={paymentMethod === 'cod'}
-                    onChange={() => setPaymentMethod('cod')}
-                    className="sr-only"
-                  />
+            {/* Payment Options Grid - Dynamically filtered to only show enabled methods for the product */}
+            {isCodSupported || isOnlineSupported ? (
+              <div className={`grid gap-3 ${isCodSupported && isOnlineSupported ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+                {/* Option 1: Cash on Delivery (COD) - only shown if enabled for product */}
+                {isCodSupported && (
                   <div
-                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                    id="payment-option-cod"
+                    onClick={() => setPaymentMethod('cod')}
+                    className={`p-4 rounded-xl border transition-all cursor-pointer relative flex items-start gap-3 ${
                       paymentMethod === 'cod'
-                        ? 'border-[#64A901] bg-white ring-2 ring-[#64A901]/20'
-                        : 'border-gray-300 bg-white'
+                        ? 'border-[#64A901] bg-[#f8fbf4] ring-2 ring-[#64A901]/15 shadow-xs'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
                     }`}
                   >
-                    {paymentMethod === 'cod' && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#64A901]" />
-                    )}
+                    <div className="mt-0.5 shrink-0">
+                      <input
+                        type="radio"
+                        id="payment-cod"
+                        name="paymentMethodSelection"
+                        value="cod"
+                        checked={paymentMethod === 'cod'}
+                        onChange={() => setPaymentMethod('cod')}
+                        className="sr-only"
+                      />
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                          paymentMethod === 'cod'
+                            ? 'border-[#64A901] bg-white ring-2 ring-[#64A901]/20'
+                            : 'border-gray-300 bg-white'
+                        }`}
+                      >
+                        {paymentMethod === 'cod' && (
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#64A901]" />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center shrink-0">
+                      <Banknote className="w-4 h-4" />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <label htmlFor="payment-cod" className="font-extrabold text-xs sm:text-sm text-gray-900 cursor-pointer block">
+                        Cash on Delivery (COD)
+                      </label>
+                      <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
+                        Pay with cash or scan UPI at your doorstep upon delivery.
+                      </p>
+                      <span className="inline-block mt-1.5 text-[10px] font-bold text-gray-600 bg-white px-2 py-0.5 rounded border border-gray-200">
+                        ✓ Pay at Doorstep
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                <div className="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center shrink-0">
-                  <Banknote className="w-4 h-4" />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <label htmlFor="payment-cod" className="font-extrabold text-xs sm:text-sm text-gray-900 cursor-pointer block">
-                    Cash on Delivery (COD)
-                  </label>
-                  <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
-                    Pay with cash or scan UPI at your doorstep upon delivery.
-                  </p>
-                  <span className="inline-block mt-1.5 text-[10px] font-bold text-gray-600 bg-white px-2 py-0.5 rounded border border-gray-200">
-                    ✓ Pay at Doorstep
-                  </span>
-                </div>
-              </div>
-
-              {/* Option 2: Online Payment */}
-              <div
-                id="payment-option-online"
-                onClick={() => setPaymentMethod('online')}
-                className={`p-4 rounded-xl border transition-all cursor-pointer relative flex items-start gap-3 ${
-                  paymentMethod === 'online'
-                    ? 'border-[#64A901] bg-[#f8fbf4] ring-2 ring-[#64A901]/15 shadow-xs'
-                    : 'border-gray-200 bg-white hover:border-gray-300'
-                }`}
-              >
-                <div className="mt-0.5 shrink-0">
-                  <input
-                    type="radio"
-                    id="payment-online"
-                    name="paymentMethodSelection"
-                    value="online"
-                    checked={paymentMethod === 'online'}
-                    onChange={() => setPaymentMethod('online')}
-                    className="sr-only"
-                  />
+                {/* Option 2: Online Payment - only shown if enabled for product */}
+                {isOnlineSupported && (
                   <div
-                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                    id="payment-option-online"
+                    onClick={() => setPaymentMethod('online')}
+                    className={`p-4 rounded-xl border transition-all cursor-pointer relative flex items-start gap-3 ${
                       paymentMethod === 'online'
-                        ? 'border-[#64A901] bg-white ring-2 ring-[#64A901]/20'
-                        : 'border-gray-300 bg-white'
+                        ? 'border-[#64A901] bg-[#f8fbf4] ring-2 ring-[#64A901]/15 shadow-xs'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
                     }`}
                   >
-                    {paymentMethod === 'online' && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#64A901]" />
-                    )}
+                    <div className="mt-0.5 shrink-0">
+                      <input
+                        type="radio"
+                        id="payment-online"
+                        name="paymentMethodSelection"
+                        value="online"
+                        checked={paymentMethod === 'online'}
+                        onChange={() => setPaymentMethod('online')}
+                        className="sr-only"
+                      />
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                          paymentMethod === 'online'
+                            ? 'border-[#64A901] bg-white ring-2 ring-[#64A901]/20'
+                            : 'border-gray-300 bg-white'
+                        }`}
+                      >
+                        {paymentMethod === 'online' && (
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#64A901]" />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center shrink-0">
+                      <CreditCard className="w-4 h-4" />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <label htmlFor="payment-online" className="font-extrabold text-xs sm:text-sm text-gray-900 cursor-pointer block">
+                        Online Payment
+                      </label>
+                      <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
+                        UPI (Google Pay, PhonePe), Cards &amp; NetBanking.
+                      </p>
+                      <span className="inline-block mt-1.5 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        ✓ Instant &amp; Encrypted
+                      </span>
+                    </div>
                   </div>
-                </div>
-
-                <div className="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center shrink-0">
-                  <CreditCard className="w-4 h-4" />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <label htmlFor="payment-online" className="font-extrabold text-xs sm:text-sm text-gray-900 cursor-pointer block">
-                    Online Payment
-                  </label>
-                  <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
-                    UPI (Google Pay, PhonePe), Cards &amp; NetBanking.
-                  </p>
-                  <span className="inline-block mt-1.5 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                    ✓ Instant &amp; Encrypted
-                  </span>
-                </div>
+                )}
               </div>
-            </div>
+            ) : (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs font-semibold">
+                ⚠️ No payment methods are currently available for the selected product(s). Please choose another product or contact store support.
+              </div>
+            )}
+
+            {/* Note when only one payment method is available */}
+            {isCodSupported && !isOnlineSupported && (
+              <p className="text-[11px] text-emerald-800 bg-emerald-50/60 p-2 rounded-lg border border-emerald-100">
+                ℹ️ Cash on Delivery is the designated payment method for this product.
+              </p>
+            )}
+            {!isCodSupported && isOnlineSupported && (
+              <p className="text-[11px] text-blue-800 bg-blue-50/60 p-2 rounded-lg border border-blue-100">
+                ℹ️ Online Payment is required for this product (Cash on Delivery is unavailable).
+              </p>
+            )}
 
             {/* Security Guarantee Note */}
             <div className="pt-2 flex items-center justify-center gap-1.5 text-[11px] text-gray-400">
@@ -1528,7 +1862,7 @@ export const Checkout: React.FC = () => {
               type="submit"
               form="checkout-form"
               id="place-order-btn"
-              disabled={isSubmitting}
+              disabled={isSubmitting || (!isCodSupported && !isOnlineSupported)}
               className="min-h-[46px] sm:min-h-[48px] px-6 sm:px-9 py-2.5 sm:py-3 bg-[#64A901] hover:bg-[#548f01] text-white rounded-xl sm:rounded-2xl font-black text-sm sm:text-base shadow-md hover:shadow-lg transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
             >
               {isSubmitting ? (
@@ -1581,12 +1915,24 @@ export const Checkout: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Phone Number *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-gray-700">Phone Number *</label>
+                    <span className={`text-[10px] font-bold ${editingAddress.phone.length === 10 ? 'text-[#488710]' : 'text-gray-400'}`}>
+                      {editingAddress.phone.length}/10 digits
+                    </span>
+                  </div>
                   <input
                     type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={10}
                     required
                     value={editingAddress.phone}
-                    onChange={(e) => setEditingAddress({ ...editingAddress, phone: e.target.value })}
+                    onChange={(e) => {
+                      const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setEditingAddress({ ...editingAddress, phone: digitsOnly });
+                    }}
+                    placeholder="10-digit mobile number"
                     className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901]"
                   />
                 </div>
@@ -1709,6 +2055,15 @@ export const Checkout: React.FC = () => {
                 <span className="text-gray-600 font-bold">Total Amount:</span>
                 <span className="font-extrabold text-gray-900 text-sm">₹{successOrder.totalAmount?.toFixed(2)}</span>
               </div>
+              {successOrder.storeCashApplied && successOrder.storeCashApplied > 0 ? (
+                <div className="flex items-center justify-between text-[#488710] bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                  <span className="font-bold flex items-center gap-1 text-[11px]">
+                    <Wallet className="w-3 h-3 text-[#64A901]" />
+                    <span>Store Cash Redeemed:</span>
+                  </span>
+                  <span className="font-extrabold text-xs">-₹{successOrder.storeCashApplied.toFixed(2)}</span>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between">
                 <span className="text-gray-600 font-bold">Payment Method:</span>
                 <span className="font-extrabold text-[#64A901]">{successOrder.paymentMethod}</span>

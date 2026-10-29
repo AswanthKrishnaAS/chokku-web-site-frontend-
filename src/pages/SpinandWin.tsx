@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Disc,
@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { useSpinGame, DEFAULT_SPIN_SLOTS } from '../context/SpinGameContext';
 import { safeFetch } from '../utils/api';
 import spinwin from '../assets/img/spinwin.png';
 import playbgm from '../assets/img/playbgm.png';
@@ -39,9 +40,11 @@ interface WheelSlice {
   label: string;
   subLabel: string;
   code: string;
-  type: 'coupon' | 'points' | 'jackpot';
+  type: string;
+  rewardType?: string;
   value: string;
   points?: number;
+  coinValue?: number;
   color: string;
   textColor: string;
   icon: string;
@@ -163,7 +166,41 @@ const WHEEL_SLICES: WheelSlice[] = [
 export const SpinandWin: React.FC = () => {
   const { addToast } = useToast();
   const { customerUser, customerPoints, fetchCustomerPoints } = useAuth();
+  const { spinGameSettings, executeBackendSpin } = useSpinGame();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Admin Dashboard Test Play Mode indicator
+  const isTestMode = searchParams.get('testMode') === 'true';
+
+  // Dynamically map configured 8 slots from backend settings or fallback to defaults
+  const currentSlices: WheelSlice[] = (
+    spinGameSettings?.slots && spinGameSettings.slots.length === 8
+      ? spinGameSettings.slots
+      : DEFAULT_SPIN_SLOTS
+  ).map((s, idx) => ({
+    id: `s${idx + 1}`,
+    label: s.label,
+    subLabel: s.subLabel,
+    code: s.couponCode,
+    type: s.rewardType,
+    rewardType: s.rewardType,
+    value: s.coinValue > 0 ? `+${s.coinValue} Coins` : s.couponCode ? s.label : s.label,
+    points: s.coinValue,
+    coinValue: s.coinValue,
+    color: s.color,
+    textColor: s.textColor || '#ffffff',
+    icon: s.icon || '★',
+    badge: s.badge || (s.rewardType === 'jackpot' ? 'JACKPOT' : s.coinValue > 0 ? 'COINS' : ''),
+  }));
+
+  // REQUIREMENT: Login Protection (Exempt during Admin Test Play Mode)
+  useEffect(() => {
+    if (!customerUser && !isTestMode) {
+      addToast('Login Required', 'Please login to access Spin and Win and claim your rewards!', 'warning');
+      navigate('/login', { state: { returnUrl: '/spin-and-win', from: '/spin-and-win' } });
+    }
+  }, [customerUser, isTestMode, navigate]);
 
   // Audio State
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
@@ -211,8 +248,50 @@ export const SpinandWin: React.FC = () => {
     localStorage.setItem('chokku_spin_sound', nextVal.toString());
   };
 
-  // Cooldown check for daily free spin
+  // Cooldown check for daily free spin with backend synchronization
   const userIdKey = customerUser?.id || (customerUser as any)?._id || 'guest_user';
+
+  // Sync server-side status on mount or when customer changes
+  useEffect(() => {
+    const fetchServerSpinStatus = async () => {
+      if (!customerUser) return;
+      try {
+        const token =
+          localStorage.getItem('chokku_customer_token_v2') || localStorage.getItem('chokku_token') || '';
+        const userId = customerUser.id || (customerUser as any)._id || '';
+        const res = await safeFetch('/spin-game/status', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'x-user-id': userId,
+          },
+        });
+        if (res.ok && res.isJson && res.data?.success) {
+          if (res.data.canSpin === false && res.data.remainingMs > 0) {
+            setIsDailyFreeSpinAvailable(false);
+            const remaining = res.data.remainingMs;
+            const hours = Math.floor(remaining / (1000 * 60 * 60));
+            const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+            setCountdownText(
+              `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+            );
+            if (res.data.lastSpinAt) {
+              setLastSpinTime(new Date(res.data.lastSpinAt).getTime());
+              localStorage.setItem(`chokku_spin_last_${userIdKey}`, new Date(res.data.lastSpinAt).getTime().toString());
+            }
+          } else if (res.data.canSpin === true) {
+            setIsDailyFreeSpinAvailable(true);
+            setCountdownText('');
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch server spin status:', err);
+      }
+    };
+
+    fetchServerSpinStatus();
+  }, [customerUser, userIdKey]);
+
   useEffect(() => {
     const checkCooldown = () => {
       try {
@@ -469,22 +548,65 @@ export const SpinandWin: React.FC = () => {
     }
   }, [showWinModal, triggerPartyPopperBlast]);
 
-  // Handle Wheel Spin
-  const spinTheWheel = () => {
+  // Handle Wheel Spin with Backend Verification & Duplicate Prevention
+  const spinTheWheel = async () => {
+    if (!customerUser && !isTestMode) {
+      addToast('Login Required', 'Please login to access Spin and Win and claim your rewards!', 'warning');
+      navigate('/login', { state: { returnUrl: '/spin-and-win', from: '/spin-and-win' } });
+      return;
+    }
+
     if (isSpinning) return;
 
     setIsSpinning(true);
     setWonPrize(null);
     setShowWinModal(false);
 
-    // Pick random winning slice with slight weighting for excitement
-    const randomIndex = Math.floor(Math.random() * WHEEL_SLICES.length);
-    const sliceCount = WHEEL_SLICES.length;
+    // Generate unique client request nonce for idempotency
+    const clientRequestId = `spin_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // REQUIREMENT: Backend-generated & validated spin outcome
+    let winningIndex = 0;
+    try {
+      const token =
+        localStorage.getItem('chokku_customer_token_v2') || localStorage.getItem('chokku_token') || '';
+      const userId = customerUser?.id || (customerUser as any)?._id || '';
+
+      const res = await executeBackendSpin(token, userId, clientRequestId, isTestMode);
+
+      if (!res.success) {
+        setIsSpinning(false);
+        if (res.alreadySpun) {
+          setIsDailyFreeSpinAvailable(false);
+          addToast(
+            'Daily Spin Limit Reached',
+            res.message || 'You have already claimed your daily free spin! Come back tomorrow.',
+            'warning'
+          );
+        } else {
+          addToast('Spin Alert', res.message || 'Unable to spin at this moment. Please try again.', 'error');
+        }
+        return;
+      }
+
+      if (typeof res.winningSlotIndex === 'number') {
+        winningIndex = res.winningSlotIndex;
+      } else {
+        winningIndex = Math.floor(Math.random() * currentSlices.length);
+      }
+    } catch (apiErr: any) {
+      console.warn('Backend spin call returned error:', apiErr);
+      setIsSpinning(false);
+      addToast('Error', 'Connection error while contacting spin game server. Please try again.', 'error');
+      return;
+    }
+
+    const sliceCount = currentSlices.length; // 8 slots
     const sliceAngle = 360 / sliceCount; // 45 deg
 
-    // The center of slice index `randomIndex` is at: (randomIndex * 45 + 22.5) clockwise from 12 o'clock.
+    // The center of slice index `winningIndex` is at: (winningIndex * 45 + 22.5) clockwise from 12 o'clock.
     // To align this center exactly with 12 o'clock pointer:
-    const targetAngleMod = (360 - (randomIndex * sliceAngle + sliceAngle / 2)) % 360;
+    const targetAngleMod = (360 - (winningIndex * sliceAngle + sliceAngle / 2)) % 360;
     const currentAngleMod = ((wheelRotation % 360) + 360) % 360;
     const extraToReachTarget = (targetAngleMod - currentAngleMod + 360) % 360;
 
@@ -495,8 +617,6 @@ export const SpinandWin: React.FC = () => {
     setWheelRotation(nextTotalRotation);
 
     // Sound ticks simulation during the 4.8s deceleration
-    let tickCount = 0;
-    const totalTicks = 28;
     const tickIntervals = [
       60, 60, 60, 70, 70, 80, 85, 90, 100, 110, 125, 140, 160, 185, 215, 250, 290, 340, 400, 470, 560, 670, 790
     ];
@@ -516,7 +636,7 @@ export const SpinandWin: React.FC = () => {
     // Settle time: 4.8 seconds
     setTimeout(async () => {
       setIsSpinning(false);
-      const prize = WHEEL_SLICES[randomIndex];
+      const prize = currentSlices[winningIndex];
       setWonPrize(prize);
       setShowWinModal(true);
       setSpinsCountToday((prev) => prev + 1);
@@ -528,65 +648,45 @@ export const SpinandWin: React.FC = () => {
       const now = Date.now();
       localStorage.setItem(`chokku_spin_last_${userIdKey}`, now.toString());
       setLastSpinTime(now);
+      setIsDailyFreeSpinAvailable(false);
 
       // 1. If prize is a Coupon / Voucher
-      const newCoupon: SavedCoupon = {
-        id: `c-spin-${Date.now()}`,
-        code: prize.code,
-        discount: prize.value,
-        title: prize.label === 'JACKPOT ₹500' ? '🎉 GRAND JACKPOT WINNER' : 'Lucky Wheel Reward',
-        desc: prize.subLabel,
-        expiry: 'Valid for 7 days',
-        color:
-          prize.type === 'jackpot'
-            ? 'from-amber-500 to-orange-600'
-            : prize.type === 'points'
-            ? 'from-amber-400 to-yellow-600'
-            : 'from-sky-500 to-indigo-600',
-        badge: prize.badge || 'LUCKY WIN',
-        createdAt: now
-      };
+      if (prize.code || ['free_delivery', 'discount', 'bonus', 'jackpot'].includes(prize.type)) {
+        const newCoupon: SavedCoupon = {
+          id: `c-spin-${Date.now()}`,
+          code: prize.code || `SPIN-${Date.now().toString().slice(-4)}`,
+          discount: prize.value,
+          title: prize.type === 'jackpot' ? '🎉 GRAND JACKPOT WINNER' : prize.label,
+          desc: prize.subLabel || 'Lucky Wheel Reward Voucher',
+          expiry: 'Valid for 7 days',
+          color:
+            prize.type === 'jackpot'
+              ? 'from-amber-500 to-orange-600'
+              : prize.coinValue && prize.coinValue > 0
+              ? 'from-amber-400 to-yellow-600'
+              : 'from-sky-500 to-indigo-600',
+          badge: prize.badge || 'LUCKY WIN',
+          createdAt: now
+        };
 
-      const updatedCoupons = [newCoupon, ...myCoupons];
-      setMyCoupons(updatedCoupons);
-      try {
-        localStorage.setItem('chokku_user_coupons', JSON.stringify(updatedCoupons));
-      } catch (err) {
-        console.error('Failed saving coupon to localStorage:', err);
-      }
-
-      // 2. If prize gives Store Points (e.g. 500 PTS)
-      if (prize.type === 'points' && prize.points) {
-        addToast('★ POINTS CREDITED!', `+${prize.points} points added to your Chokku balance!`, 'success');
-
-        // Submit points to backend server if customer is logged in
+        const updatedCoupons = [newCoupon, ...myCoupons];
+        setMyCoupons(updatedCoupons);
         try {
-          const token =
-            localStorage.getItem('chokku_customer_token_v2') || localStorage.getItem('chokku_token') || '';
-          const userId = customerUser?.id || (customerUser as any)?._id || '';
-
-          if (token && userId) {
-            await safeFetch('/catch-game/score', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-                'x-user-id': userId
-              },
-              body: JSON.stringify({
-                score: prize.points,
-                coinsCollected: Math.floor(prize.points / 10),
-                giftsCollected: 1
-              })
-            });
-            fetchCustomerPoints();
-          }
-        } catch (apiErr) {
-          console.warn('Could not sync points with server:', apiErr);
+          localStorage.setItem('chokku_user_coupons', JSON.stringify(updatedCoupons));
+        } catch (err) {
+          console.error('Failed saving coupon to localStorage:', err);
         }
       }
-      // Points or coupon rewards saved directly to state and database
-      // The dedicated Celebration Winner Modal with party-popper blast handles victory celebration
+
+      // 2. If prize gives Store Coins / Points: Automatically add to existing balance & refresh
+      if (prize.coinValue && prize.coinValue > 0) {
+        addToast(
+          '🪙 COINS CREDITED!',
+          `+${prize.coinValue} coins automatically added to your Chokku store wallet! Convert to Store Cash in Points.`,
+          'success'
+        );
+        await fetchCustomerPoints();
+      }
     }, 4800);
   };
 
@@ -601,7 +701,7 @@ export const SpinandWin: React.FC = () => {
   const radius = 215;
   const cx = 250;
   const cy = 250;
-  const sliceCount = WHEEL_SLICES.length;
+  const sliceCount = currentSlices.length;
   const anglePerSlice = 360 / sliceCount;
 
   return (
@@ -834,7 +934,7 @@ export const SpinandWin: React.FC = () => {
                 </defs>
 
                 {/* Slices Arc Path Rendering */}
-                {WHEEL_SLICES.map((slice, idx) => {
+                {currentSlices.map((slice, idx) => {
                   const startAngle = idx * anglePerSlice - 90;
                   const endAngle = (idx + 1) * anglePerSlice - 90;
                   const midAngle = startAngle + anglePerSlice / 2;
@@ -966,6 +1066,8 @@ export const SpinandWin: React.FC = () => {
               className={`w-full py-4 px-6 rounded-full font-black text-sm sm:text-base tracking-wider uppercase transition-all duration-300 shadow-lg cursor-pointer flex items-center justify-center gap-2.5 border active:scale-95 ${
                 isSpinning
                   ? 'bg-slate-700 text-slate-300 border-slate-600 cursor-not-allowed opacity-90'
+                  : !customerUser && !isTestMode
+                  ? 'bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white border-amber-400 shadow-amber-500/25 hover:shadow-xl hover:-translate-y-0.5'
                   : 'bg-gradient-to-r from-[#0284c7] via-sky-600 to-[#488710] hover:from-sky-700 hover:to-emerald-700 text-white border-sky-300/60 shadow-sky-500/25 hover:shadow-xl hover:-translate-y-0.5'
               }`}
             >
@@ -973,6 +1075,8 @@ export const SpinandWin: React.FC = () => {
               <span>
                 {isSpinning
                   ? 'SPINNING THE WHEEL...'
+                  : !customerUser && !isTestMode
+                  ? 'LOG IN OR SIGN UP TO PLAY'
                   : isDailyFreeSpinAvailable
                   ? 'SPIN WHEEL FOR FREE NOW'
                   : 'SPIN AGAIN (BONUS SPIN)'}
@@ -985,6 +1089,8 @@ export const SpinandWin: React.FC = () => {
               <span>
                 {isSpinning
                   ? 'Hold on tight! Decelerating on your lucky prize...'
+                  : !customerUser && !isTestMode
+                  ? 'Sign in to spin the wheel and claim guaranteed discount coupons & points!'
                   : isDailyFreeSpinAvailable
                   ? 'Tap the button above to claim your free reward!'
                   : `Next official daily free spin resets in: ${countdownText}`}
@@ -1008,7 +1114,7 @@ export const SpinandWin: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-            {WHEEL_SLICES.map((slice) => (
+            {currentSlices.map((slice) => (
               <div
                 key={slice.id}
                 className="bg-white rounded-2xl p-3 sm:p-3.5 border border-gray-100 hover:border-gray-200 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between"
@@ -1113,10 +1219,10 @@ export const SpinandWin: React.FC = () => {
               </div>
 
               <span className="text-[11px] font-black uppercase tracking-widest bg-black/20 px-3 py-1 rounded-full inline-block">
-                🎉 LUCKY SPIN WINNER
+                {wonPrize.rewardType === 'no_prize' ? '🍀 BETTER LUCK NEXT TIME' : '🎉 LUCKY SPIN WINNER'}
               </span>
               <h3 className="text-2xl sm:text-3xl font-black mt-2 drop-shadow-md">
-                YOU WON {wonPrize.label}!
+                {wonPrize.rewardType === 'no_prize' ? wonPrize.label : `YOU WON ${wonPrize.label}!`}
               </h3>
               <p className="text-xs text-white/90 font-medium mt-1">
                 {wonPrize.subLabel}
@@ -1126,32 +1232,60 @@ export const SpinandWin: React.FC = () => {
             {/* Voucher Body Details */}
             <div className="p-6 space-y-5 text-center">
               
-              {/* Voucher Ticket Card */}
-              <div className="bg-gradient-to-br from-slate-50 to-gray-100 rounded-2xl p-4 border-2 border-dashed border-gray-300 relative space-y-2">
-                <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                  Your Exclusive Coupon Code
-                </p>
-                <div className="flex items-center justify-center gap-2">
-                  <span className="font-mono font-black text-lg sm:text-xl text-slate-900 bg-white px-4 py-2 rounded-xl border border-gray-200 tracking-wider shadow-inner">
-                    {wonPrize.code}
-                  </span>
-                  <button
-                    onClick={() => copyCouponCode(wonPrize.code)}
-                    className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors cursor-pointer flex items-center gap-1"
-                    title="Copy Code"
-                  >
-                    {copiedCode === wonPrize.code ? (
-                      <Check className="w-4 h-4 text-emerald-400" />
-                    ) : (
-                      <Copy className="w-4 h-4" />
-                    )}
-                  </button>
+              {/* Coin Reward Banner if Coins won */}
+              {wonPrize.coinValue && wonPrize.coinValue > 0 ? (
+                <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200 text-center space-y-1">
+                  <p className="text-[11px] font-extrabold text-amber-800 uppercase tracking-wider">
+                    Coins Credited
+                  </p>
+                  <p className="text-2xl font-black text-amber-700">
+                    +{wonPrize.coinValue} Chokku Coins
+                  </p>
+                  <p className="text-[11px] text-amber-900 font-medium">
+                    Added to your points balance! Convert to Store Cash anytime in your Points wallet.
+                  </p>
                 </div>
-                <p className="text-[10px] text-gray-400 font-semibold">
-                  Saved automatically to your "My Coupons" wallet • Valid for 7 days
-                </p>
+              ) : null}
 
-                {/* Quick Party Popper Re-Blast Button */}
+              {/* Voucher Ticket Card if code present */}
+              {wonPrize.code ? (
+                <div className="bg-gradient-to-br from-slate-50 to-gray-100 rounded-2xl p-4 border-2 border-dashed border-gray-300 relative space-y-2">
+                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Your Exclusive Coupon Code
+                  </p>
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="font-mono font-black text-lg sm:text-xl text-slate-900 bg-white px-4 py-2 rounded-xl border border-gray-200 tracking-wider shadow-inner">
+                      {wonPrize.code}
+                    </span>
+                    <button
+                      onClick={() => copyCouponCode(wonPrize.code)}
+                      className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors cursor-pointer flex items-center gap-1"
+                      title="Copy Code"
+                    >
+                      {copiedCode === wonPrize.code ? (
+                        <Check className="w-4 h-4 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-gray-400 font-semibold">
+                    Saved automatically to your "My Coupons" wallet • Valid for 7 days
+                  </p>
+                </div>
+              ) : wonPrize.rewardType === 'no_prize' ? (
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-center space-y-1">
+                  <p className="text-sm font-black text-slate-800">
+                    Better luck on your next spin!
+                  </p>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Your daily free spin resets in 24 hours. Keep shopping and come back tomorrow!
+                  </p>
+                </div>
+              ) : null}
+
+              {/* Quick Party Popper Re-Blast Button */}
+              {wonPrize.rewardType !== 'no_prize' && (
                 <div className="pt-1">
                   <button
                     onClick={triggerPartyPopperBlast}
@@ -1161,7 +1295,7 @@ export const SpinandWin: React.FC = () => {
                     <span>Blast Confetti Again 🎉</span>
                   </button>
                 </div>
-              </div>
+              )}
 
               {/* Action Buttons */}
               <div className="space-y-2">

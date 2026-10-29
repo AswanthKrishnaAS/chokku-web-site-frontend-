@@ -219,25 +219,14 @@ export const ProductView: React.FC = () => {
                 {product.name}
               </h1>
 
-              {/* Homepage Placement Badges */}
-              <div className="flex flex-wrap gap-2 pt-1">
-                {product.isFeatured && (
-                  <span className="bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Featured Item</span>
-                  </span>
-                )}
-                {product.isNewArrival && (
-                  <span className="bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-                    <span>✦ New Arrival</span>
-                  </span>
-                )}
-                {product.isBestSeller && (
+              {/* Badges */}
+              {product.isBestSeller && (
+                <div className="flex flex-wrap gap-2 pt-1">
                   <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
                     <span>🔥 Best Seller</span>
                   </span>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             {/* Pricing Card */}

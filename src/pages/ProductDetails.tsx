@@ -45,7 +45,7 @@ export const ProductDetails: React.FC = () => {
   const { addToCart, setBuyNowItem } = useCart();
   const { toggleWishlist, isInWishlist } = useWishlist();
   const { addToast } = useToast();
-  const { customerUser } = useAuth();
+  const { customerUser, customerWalletBalance } = useAuth();
 
   const allProducts = storeProducts.length > 0 ? storeProducts : PRODUCTS;
   const product = allProducts.find((p) => p.id === id);
@@ -880,6 +880,26 @@ export const ProductDetails: React.FC = () => {
                     )}
                   </div>
                 </div>
+              </div>
+
+              {/* Store Cash Buy Now Benefit Pill */}
+              <div className="bg-[#f4fbf0] border border-[#d8f2c8] rounded-2xl p-2.5 px-3 flex items-center justify-between text-xs text-emerald-900 shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#64A901] text-white flex items-center justify-center font-black text-[10px] shrink-0">
+                    ₹
+                  </span>
+                  <span className="text-[11px] font-bold text-gray-800">
+                    {customerUser
+                      ? `Available Store Cash: ₹${customerWalletBalance || (customerUser as any).walletBalance || 0} • Redeem ₹30+ on Buy Now`
+                      : 'Store Cash Available • 1,000 Points = ₹1 Store Cash'}
+                  </span>
+                </div>
+                <Link
+                  to="/points"
+                  className="text-[11px] font-black text-[#488710] hover:underline shrink-0"
+                >
+                  {customerUser ? 'Convert Points' : 'Learn More'}
+                </Link>
               </div>
 
               {/* Action Buttons: Add to Cart, Buy Now */}

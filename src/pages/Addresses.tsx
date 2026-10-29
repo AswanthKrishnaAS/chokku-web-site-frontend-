@@ -80,6 +80,11 @@ export const Addresses: React.FC = () => {
       return;
     }
 
+    if (formData.phone.replace(/\D/g, '').length !== 10) {
+      addToast('Invalid Phone Number', 'Please enter a valid 10-digit mobile number.', 'error');
+      return;
+    }
+
     const res = await addSavedAddress({
       fullName: formData.fullName,
       email: formData.email || user.email || '',
@@ -254,13 +259,24 @@ export const Addresses: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Phone Number *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-gray-700">Phone Number *</label>
+                  <span className={`text-[10px] font-bold ${formData.phone.replace(/\D/g, '').length === 10 ? 'text-[#488710]' : 'text-gray-400'}`}>
+                    {formData.phone.replace(/\D/g, '').length}/10 digits
+                  </span>
+                </div>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={10}
                   required
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="+91 9876543210"
+                  onChange={(e) => {
+                    const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setFormData({ ...formData, phone: digitsOnly });
+                  }}
+                  placeholder="10-digit mobile number"
                   className="w-full px-3.5 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:border-[#488710] focus:bg-white font-medium"
                 />
               </div>

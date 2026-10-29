@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Search, User, ShoppingCart, ChevronDown, Menu, X, Sparkles, Bell, Percent, Gamepad2, Gift, Heart, Coins } from 'lucide-react';
+import { Search, User, ShoppingCart, ChevronDown, Menu, X, Sparkles, Percent, Gamepad2, Gift, Heart, Coins } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useWebsiteSettings } from '../context/WebsiteSettingsContext';
@@ -26,16 +26,11 @@ export const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const searchRef = useRef<HTMLDivElement>(null);
-  const notificationRef = useRef<HTMLDivElement>(null);
-
-  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
 
   const closeAllMenus = () => {
     setIsMobileMenuOpen(false);
     setIsCategoryDropdownOpen(false);
     setIsSearchOpen(false);
-    setIsNotificationOpen(false);
   };
 
   // Auto-close navbar & popovers on route/location change
@@ -46,14 +41,14 @@ export const Navbar: React.FC = () => {
   // Auto-close navbar & popovers on window scroll
   useEffect(() => {
     const handleScroll = () => {
-      if (isMobileMenuOpen || isCategoryDropdownOpen || isSearchOpen || isNotificationOpen) {
+      if (isMobileMenuOpen || isCategoryDropdownOpen || isSearchOpen) {
         closeAllMenus();
       }
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [isMobileMenuOpen, isCategoryDropdownOpen, isSearchOpen, isNotificationOpen]);
+  }, [isMobileMenuOpen, isCategoryDropdownOpen, isSearchOpen]);
 
   // Smooth points update animation state
   const [isPointsAnimating, setIsPointsAnimating] = useState(false);
@@ -68,46 +63,11 @@ export const Navbar: React.FC = () => {
     }
   }, [customerPoints]);
 
-  useEffect(() => {
-    if (orders && orders.length > 0) {
-      setHasUnreadNotifications(true);
-    } else {
-      setHasUnreadNotifications(false);
-    }
-  }, [orders]);
-
-  const notifications = React.useMemo(() => {
-    if (!orders || orders.length === 0) return [];
-
-    return orders.map((ord) => {
-      const statusIcon =
-        ord.status === 'Delivered'
-          ? '✅'
-          : ord.status === 'Cancelled'
-          ? '❌'
-          : ord.status === 'Shipped'
-          ? '🚚'
-          : '📦';
-
-      return {
-        id: `notif-${ord.id}`,
-        icon: statusIcon,
-        title: `Order ${ord.id}`,
-        message: `Status: ${ord.status} • Total: ₹${ord.totalAmount.toFixed(2)}`,
-        time: ord.date,
-        link: '/orders',
-      };
-    });
-  }, [orders]);
-
-  // Close search & notification when clicking outside
+  // Close search when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setIsSearchOpen(false);
-      }
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
-        setIsNotificationOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -125,14 +85,26 @@ export const Navbar: React.FC = () => {
   // Populate search suggestions based on dynamic products
   useEffect(() => {
     if (searchQuery.trim().length > 1) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
+      const words = q.split(/\s+/).filter(Boolean);
       const allProds = storeProducts.length > 0 ? storeProducts : PRODUCTS;
-      const matches = allProds.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          (p.categoryName && p.categoryName.toLowerCase().includes(q)) ||
-          (p.tags && p.tags.some((t) => t.toLowerCase().includes(q)))
-      ).slice(0, 5);
+      const matches = allProds
+        .filter((p) => {
+          const text = [
+            p.name,
+            p.categoryName,
+            p.category,
+            p.description,
+            ...(Array.isArray(p.tags) ? p.tags : []),
+            ...(Array.isArray(p.highlights) ? p.highlights : []),
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+
+          return text.includes(q) || words.every((w) => text.includes(w));
+        })
+        .slice(0, 5);
       setSearchSuggestions(matches);
     } else {
       setSearchSuggestions([]);
@@ -288,66 +260,8 @@ export const Navbar: React.FC = () => {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
           </form>
 
-          {/* Icons: Bell & Cart */}
+          {/* Icons: Cart */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* Bell Notification Icon */}
-            <div className="relative" ref={notificationRef}>
-              <button
-                onClick={() => {
-                  setIsNotificationOpen(!isNotificationOpen);
-                  setHasUnreadNotifications(false);
-                }}
-                className="relative p-1.5 text-gray-700 hover:text-[#488710] rounded-full hover:bg-gray-50 transition-colors"
-                aria-label="Notifications"
-              >
-                <Bell className="w-5 h-5 stroke-[2]" />
-                {notifications.length > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 bg-[#488710] text-white text-[10px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-white">
-                    {notifications.length}
-                  </span>
-                )}
-              </button>
-
-              {/* Notification Popover Dropdown */}
-              {isNotificationOpen && (
-                <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-gray-100 p-3 z-50 animate-slide-down">
-                  <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-2">
-                    <div className="flex items-center gap-1.5">
-                      <Bell className="w-4 h-4 text-[#488710]" />
-                      <h4 className="font-extrabold text-gray-900 text-xs">Notifications</h4>
-                    </div>
-                    <span className="text-[9px] font-bold text-[#488710] bg-[#f0f9e8] px-2 py-0.5 rounded-full border border-[#d2ea9d]">
-                      {notifications.length} New
-                    </span>
-                  </div>
-
-                  <div className="space-y-1.5 max-h-60 overflow-y-auto">
-                    {notifications.length === 0 ? (
-                      <div className="py-6 text-center text-gray-400 font-medium text-xs">
-                        No Notifications
-                      </div>
-                    ) : (
-                      notifications.map((n) => (
-                        <div
-                          key={n.id}
-                          onClick={() => {
-                            setIsNotificationOpen(false);
-                            if (n.link) navigate(n.link);
-                          }}
-                          className="p-2 bg-gray-50 hover:bg-[#f0f9e8] rounded-xl transition-all cursor-pointer flex items-center gap-2"
-                        >
-                          <span className="text-sm">{n.icon}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-gray-900 truncate">{n.title}</p>
-                            <p className="text-[10px] text-gray-500 truncate">{n.message}</p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
 
             {/* Shopping Cart Icon with Green Badge */}
             <Link
@@ -623,67 +537,7 @@ export const Navbar: React.FC = () => {
             )}
           </div>
 
-          {/* Notification Bell Icon */}
-          <div className="relative" ref={notificationRef}>
-            <button
-              onClick={() => {
-                setIsNotificationOpen(!isNotificationOpen);
-                setHasUnreadNotifications(false);
-              }}
-              className="relative p-2.5 text-[#1e293b] hover:text-[#488710] hover:bg-[#f0f9e8] rounded-full transition-all duration-200 flex items-center cursor-pointer"
-              title="Notifications"
-            >
-              <Bell className="w-5 h-5 stroke-[2.3]" />
-              {hasUnreadNotifications && (
-                <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-white animate-pulse" />
-              )}
-            </button>
 
-            {/* Notification Popover Dropdown */}
-            {isNotificationOpen && (
-              <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-3xl shadow-2xl border border-gray-100 p-4 z-50 animate-slide-down">
-                <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-3">
-                  <div className="flex items-center gap-2">
-                    <Bell className="w-4 h-4 text-[#488710]" />
-                    <h4 className="font-extrabold text-gray-900 text-sm">Notifications</h4>
-                  </div>
-                  <span className="text-[10px] font-bold text-[#488710] bg-[#f0f9e8] px-2.5 py-0.5 rounded-full border border-[#d2ea9d]">
-                    {notifications.length} New
-                  </span>
-                </div>
-
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                  {notifications.length === 0 ? (
-                    <div className="py-8 text-center text-gray-400 font-medium text-xs space-y-1">
-                      <Bell className="w-8 h-8 text-gray-300 mx-auto mb-2 opacity-50" />
-                      <p className="font-bold text-gray-700">No Notifications</p>
-                      <p className="text-[11px] text-gray-400">Your order status updates will appear here.</p>
-                    </div>
-                  ) : (
-                    notifications.map((n) => (
-                      <div
-                        key={n.id}
-                        onClick={() => {
-                          setIsNotificationOpen(false);
-                          if (n.link) navigate(n.link);
-                        }}
-                        className="p-3 bg-gray-50/80 hover:bg-[#f0f9e8] rounded-2xl border border-gray-100 transition-all cursor-pointer flex items-start gap-3"
-                      >
-                        <div className="w-8 h-8 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-base shrink-0 shadow-2xs">
-                          {n.icon}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-gray-900 leading-tight">{n.title}</p>
-                          <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{n.message}</p>
-                          <span className="text-[9px] font-semibold text-gray-400 mt-1 block">{n.time}</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
 
           {/* Authenticated Customer Points Badge */}
           {isAuthenticated && (

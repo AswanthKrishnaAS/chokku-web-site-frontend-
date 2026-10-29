@@ -42,6 +42,7 @@ export const Profile: React.FC = () => {
   const [activeModal, setActiveModal] = useState<
     'none' | 'privacy' | 'returnPolicy' | 'terms' | 'support' | 'payments'
   >('none');
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   if (!isAuthenticated || !user) {
     return (
@@ -127,10 +128,7 @@ export const Profile: React.FC = () => {
             </Link>
 
             <button
-              onClick={() => {
-                logout();
-                navigate('/');
-              }}
+              onClick={() => setShowLogoutConfirm(true)}
               className="flex-1 sm:flex-initial bg-[#e11d48] hover:bg-rose-700 text-white rounded-xl px-3.5 py-2 text-xs font-extrabold shadow-2xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
@@ -676,6 +674,70 @@ export const Profile: React.FC = () => {
                 className="w-full py-2.5 text-xs font-extrabold text-white bg-[#488710] hover:bg-[#386b0c] rounded-xl transition-colors shadow-md cursor-pointer"
               >
                 Close Support
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LOGOUT CONFIRMATION MODAL */}
+      {showLogoutConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
+          onClick={() => setShowLogoutConfirm(false)}
+        >
+          <div
+            className="relative w-full max-w-sm sm:max-w-md bg-white rounded-3xl p-6 sm:p-7 shadow-2xl border border-gray-100 text-center animate-scale-up overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top Close Icon */}
+            <button
+              onClick={() => setShowLogoutConfirm(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 flex items-center justify-center transition-all cursor-pointer"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Warning Icon Badge */}
+            <div className="w-16 h-16 rounded-2xl bg-rose-50 border-2 border-rose-200 text-rose-600 flex items-center justify-center mx-auto mb-4 shadow-xs">
+              <LogOut className="w-7 h-7 stroke-[2.2]" />
+            </div>
+
+            {/* Title */}
+            <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
+              Confirm Logout
+            </h3>
+
+            {/* Description */}
+            <p className="mt-2 text-xs sm:text-sm text-gray-500 font-medium leading-relaxed max-w-xs mx-auto">
+              Are you sure you want to log out of your Chokku Store account?
+            </p>
+
+            {/* Options: Yes and No */}
+            <div className="mt-6 flex items-center gap-3">
+              {/* No Option: Close modal and keep them logged in */}
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-3 px-4 rounded-2xl border border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700 font-extrabold text-xs sm:text-sm transition-all cursor-pointer active:scale-98"
+              >
+                No
+              </button>
+
+              {/* Yes Option: Log them out and redirect */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  logout();
+                  navigate('/');
+                }}
+                className="flex-1 py-3 px-4 rounded-2xl bg-[#e11d48] hover:bg-rose-700 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-rose-600/25 transition-all cursor-pointer active:scale-98"
+              >
+                Yes
               </button>
             </div>
           </div>

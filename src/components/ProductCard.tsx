@@ -21,7 +21,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       <div className="relative aspect-4/3 w-full bg-gray-50 overflow-hidden">
         <Link to={`/product/${product.id}`} className="block w-full h-full">
           <img
-            src={product.image}
+            src={product.image || (Array.isArray(product.galleryImages) && product.galleryImages[0]) || ''}
             alt={product.name}
             referrerPolicy="no-referrer"
             className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
@@ -29,9 +29,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         </Link>
 
         {/* Discount Badge */}
-        {product.discountPercent > 0 && (
+        {((product.discountPercent && product.discountPercent > 0) || (product.originalPrice > product.price)) && (
           <div className="absolute top-3 left-3 bg-brand-green text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-sm">
-            {product.discountPercent}% OFF
+            {product.discountPercent || Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF
           </div>
         )}
 
@@ -58,7 +58,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         <div>
           {/* Category Tag */}
           <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-brand-blue bg-brand-light-blue px-2 py-0.5 rounded-md inline-block mb-1 sm:mb-1.5">
-            {product.categoryName}
+            {product.categoryName || product.category || 'General'}
           </span>
 
           {/* Title */}
@@ -73,8 +73,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             <div className="flex items-center text-amber-400">
               <Star className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-current" />
             </div>
-            <span className="text-[11px] sm:text-xs font-semibold text-gray-800">{product.rating}</span>
-            <span className="text-[11px] sm:text-xs text-gray-400">({product.reviewCount})</span>
+            <span className="text-[11px] sm:text-xs font-semibold text-gray-800">{product.rating ?? 5.0}</span>
+            <span className="text-[11px] sm:text-xs text-gray-400">({product.reviewCount ?? 0})</span>
           </div>
         </div>
 
@@ -83,11 +83,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-baseline gap-1">
               <span className="text-sm sm:text-base md:text-lg font-extrabold text-gray-900 truncate">
-                ₹{product.price.toFixed(2)}
+                ₹{Number(product.price || 0).toFixed(2)}
               </span>
-              {product.originalPrice > product.price && (
+              {Number(product.originalPrice || 0) > Number(product.price || 0) && (
                 <span className="text-[10px] sm:text-xs text-gray-400 line-through truncate">
-                  ₹{product.originalPrice.toFixed(2)}
+                  ₹{Number(product.originalPrice).toFixed(2)}
                 </span>
               )}
             </div>

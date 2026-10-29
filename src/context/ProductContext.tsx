@@ -14,6 +14,7 @@ interface ProductContextType {
   fetchMeeshoProductDetails: (url: string) => Promise<{ success: boolean; message: string; data?: any }>;
   fetchMeeshoReviews: (url: string, count?: number | string) => Promise<{ success: boolean; message: string; data?: any }>;
   importReviews: (productId: string, reviews: ProductReview[]) => Promise<{ success: boolean; message: string }>;
+  toggleProductFeatured: (productId: string) => Promise<{ success: boolean; message: string }>;
   refreshProducts: () => Promise<void>;
 }
 
@@ -175,6 +176,21 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
       success: true,
       message: 'Product deleted successfully',
     };
+  };
+
+  const toggleProductFeatured = async (productId: string) => {
+    try {
+      const res = await safeFetch(`/products/${productId}/toggle-featured`, {
+        method: 'PATCH',
+      });
+      if (res.ok && res.isJson && res.data?.success && Array.isArray(res.data?.products)) {
+        saveProductsLocal(res.data.products);
+        return { success: true, message: res.data.message || 'Product featured status updated' };
+      }
+      return { success: false, message: res.data?.message || 'Failed to toggle featured status' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Error updating featured status' };
+    }
   };
 
   const addOrUpdateReview = async (productId: string, reviewData: Partial<ProductReview>) => {
@@ -350,6 +366,7 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
         fetchMeeshoProductDetails,
         fetchMeeshoReviews,
         importReviews,
+        toggleProductFeatured,
         refreshProducts,
       }}
     >
