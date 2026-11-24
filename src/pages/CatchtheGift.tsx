@@ -164,41 +164,129 @@ export const CatchtheGift: React.FC = () => {
 
   // 24-Hour Replay Restriction & Ad Video State
   const userIdKey = customerUser?.id || (customerUser as any)?._id || 'guest';
-  const [lastPlayedTime, setLastPlayedTime] = useState<number>(() => {
-    const saved = localStorage.getItem(`catch_gift_last_played_${userIdKey}`);
-    return saved ? parseInt(saved, 10) : 0;
-  });
+  const maxPlays = Math.max(1, catchTheGiftSettings?.dailyPlayLimit || 1);
+  const [playsCountToday, setPlaysCountToday] = useState<number>(0);
+  const [playsRemaining, setPlaysRemaining] = useState<number>(maxPlays);
   const [hasReplayTicket, setHasReplayTicket] = useState<boolean>(() => {
     return localStorage.getItem(`catch_gift_replay_ticket_${userIdKey}`) === 'true';
   });
   const [remainingCooldown, setRemainingCooldown] = useState<number>(0);
 
-  // Ad Video Modal States
+  // Ad Video Modal States (No skip option allowed)
   const [showAdModal, setShowAdModal] = useState<boolean>(false);
   const [adTimer, setAdTimer] = useState<number>(10);
   const [adFinished, setAdFinished] = useState<boolean>(false);
-  const [showEarlyExitPrompt, setShowEarlyExitPrompt] = useState<boolean>(false);
 
-  // 24h Cooldown duration (86,400,000 ms = 24 hours)
-  const COOLDOWN_DURATION_MS = 24 * 60 * 60 * 1000;
+  // Helper to read stored timestamps within the rolling 24-hour window
+  const getStoredPlayTimestamps = useCallback((): number[] => {
+    try {
+      const raw = localStorage.getItem(`catch_gift_timestamps_${userIdKey}`);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          const windowMs = 24 * 60 * 60 * 1000;
+          const cutoff = Date.now() - windowMs;
+          return arr.filter((t: any) => typeof t === 'number' && t > cutoff);
+        }
+      }
+      // Migration from legacy single-timestamp key
+      const legacy = localStorage.getItem(`catch_gift_last_played_${userIdKey}`);
+      if (legacy) {
+        const t = parseInt(legacy, 10);
+        const windowMs = 24 * 60 * 60 * 1000;
+        if (t && Date.now() - t < windowMs) {
+          return [t];
+        }
+      }
+    } catch (e) {
+      console.warn('Error reading play timestamps:', e);
+    }
+    return [];
+  }, [userIdKey]);
+
+  const savePlayTimestamps = useCallback(
+    (timestamps: number[]) => {
+      try {
+        localStorage.setItem(`catch_gift_timestamps_${userIdKey}`, JSON.stringify(timestamps));
+        if (timestamps.length > 0) {
+          localStorage.setItem(`catch_gift_last_played_${userIdKey}`, timestamps[timestamps.length - 1].toString());
+        }
+      } catch (e) {
+        console.warn('Error saving play timestamps:', e);
+      }
+    },
+    [userIdKey]
+  );
+
+  // Sync server-side status on mount or when customer/settings change
+  useEffect(() => {
+    const fetchServerStatus = async () => {
+      if (!customerUser) return;
+      try {
+        const token =
+          localStorage.getItem('chokku_customer_token_v2') || localStorage.getItem('chokku_token') || '';
+        const userId = customerUser.id || (customerUser as any)._id || '';
+        const res = await safeFetch('/catch-game/status', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'x-user-id': userId,
+          },
+        });
+        if (res.ok && res.isJson && res.data?.success) {
+          const srvMax = typeof res.data.maxPlays === 'number' ? res.data.maxPlays : maxPlays;
+          const srvUsed = typeof res.data.playsUsed === 'number' ? res.data.playsUsed : 0;
+          const srvRemaining = typeof res.data.playsRemaining === 'number'
+            ? res.data.playsRemaining
+            : Math.max(0, srvMax - srvUsed);
+
+          setPlaysCountToday(srvUsed);
+          setPlaysRemaining(srvRemaining);
+
+          if (res.data.canPlay === false && res.data.remainingMs > 0) {
+            setRemainingCooldown(res.data.remainingMs);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch server catch game status:', err);
+      }
+    };
+
+    fetchServerStatus();
+  }, [customerUser, userIdKey, maxPlays]);
 
   useEffect(() => {
     const checkCooldown = () => {
-      if (!lastPlayedTime || isTestMode || hasReplayTicket) {
+      if (isTestMode || hasReplayTicket) {
         setRemainingCooldown(0);
         return;
       }
-      const elapsed = Date.now() - lastPlayedTime;
-      const remaining = Math.max(0, COOLDOWN_DURATION_MS - elapsed);
-      setRemainingCooldown(remaining);
+      try {
+        const valid = getStoredPlayTimestamps();
+        const used = valid.length;
+        const remaining = Math.max(0, maxPlays - used);
+
+        setPlaysCountToday(used);
+        setPlaysRemaining(remaining);
+
+        if (remaining > 0) {
+          setRemainingCooldown(0);
+        } else {
+          const windowMs = 24 * 60 * 60 * 1000;
+          const oldest = valid[0] || Date.now();
+          const diffMs = Math.max(0, (oldest + windowMs) - Date.now());
+          setRemainingCooldown(diffMs);
+        }
+      } catch (err) {
+        console.error(err);
+      }
     };
 
     checkCooldown();
     const interval = setInterval(checkCooldown, 1000);
     return () => clearInterval(interval);
-  }, [lastPlayedTime, isTestMode, hasReplayTicket, COOLDOWN_DURATION_MS]);
+  }, [userIdKey, maxPlays, getStoredPlayTimestamps, isTestMode, hasReplayTicket]);
 
-  const canPlay = isTestMode || hasReplayTicket || remainingCooldown <= 0;
+  const canPlay = isTestMode || hasReplayTicket || playsRemaining > 0;
 
   // Format countdown ms to HHh MMm SSs
   const formatCountdown = (ms: number): string => {
@@ -214,10 +302,10 @@ export const CatchtheGift: React.FC = () => {
     return `${pad(minutes)}m ${pad(seconds)}s`;
   };
 
-  // Ad countdown timer effect
+  // Ad countdown timer effect (no early exit or skip)
   useEffect(() => {
     let timerInterval: any;
-    if (showAdModal && !adFinished && !showEarlyExitPrompt) {
+    if (showAdModal && !adFinished) {
       timerInterval = setInterval(() => {
         setAdTimer((prev) => {
           if (prev <= 1) {
@@ -233,27 +321,18 @@ export const CatchtheGift: React.FC = () => {
     return () => {
       if (timerInterval) clearInterval(timerInterval);
     };
-  }, [showAdModal, adFinished, showEarlyExitPrompt]);
+  }, [showAdModal, adFinished]);
 
   const openAdModal = () => {
     setAdTimer(10);
     setAdFinished(false);
-    setShowEarlyExitPrompt(false);
     setShowAdModal(true);
   };
 
   const handleCloseAd = () => {
     if (adFinished) {
       setShowAdModal(false);
-      return;
     }
-    setShowEarlyExitPrompt(true);
-  };
-
-  const confirmExitAdEarly = () => {
-    setShowEarlyExitPrompt(false);
-    setShowAdModal(false);
-    addToast('Ad Incomplete', 'You must watch the full ad video to earn a replay ticket. Daily 24h wait is active.', 'warning');
   };
 
   const handlePlayAfterAd = () => {
@@ -759,6 +838,7 @@ export const CatchtheGift: React.FC = () => {
         coinsCollected: itemStatsRef.current.coins,
         specialGiftsCollected: itemStatsRef.current.specialGifts,
         bombsHit: itemStatsRef.current.bombs,
+        usedReplayTicket: hasReplayTicket,
       };
 
       const res = await safeFetch('/catch-game/score', {
@@ -773,6 +853,12 @@ export const CatchtheGift: React.FC = () => {
 
       if (res.ok && res.data?.success) {
         console.log('✅ Customer game score saved to database:', res.data);
+        if (typeof res.data.playsRemaining === 'number') {
+          setPlaysRemaining(res.data.playsRemaining);
+        }
+        if (typeof res.data.playsUsed === 'number') {
+          setPlaysCountToday(res.data.playsUsed);
+        }
         fetchCustomerPoints(); // Automatically refresh Navbar & Profile points
       }
     } catch (err) {
@@ -788,11 +874,14 @@ export const CatchtheGift: React.FC = () => {
     playAudio('gameover');
     setGameState('gameover');
 
-    // Save 24-hour replay cooldown timestamp (unless in admin test mode)
+    // Save 24-hour play attempt timestamp (unless in admin test mode)
     if (!isTestMode) {
       const now = Date.now();
-      setLastPlayedTime(now);
-      localStorage.setItem(`catch_gift_last_played_${userIdKey}`, now.toString());
+      const prevTimestamps = getStoredPlayTimestamps();
+      const nextTimestamps = [...prevTimestamps, now];
+      savePlayTimestamps(nextTimestamps);
+      setPlaysCountToday(nextTimestamps.length);
+      setPlaysRemaining(Math.max(0, maxPlays - nextTimestamps.length));
       setHasReplayTicket(false);
       localStorage.removeItem(`catch_gift_replay_ticket_${userIdKey}`);
     }
@@ -878,7 +967,7 @@ export const CatchtheGift: React.FC = () => {
             {canPlay ? (
               <>
                 <Play className="w-4 h-4 fill-white" />
-                <span>Play Game</span>
+                <span>Play Game {maxPlays > 1 && playsRemaining > 0 ? `(${playsRemaining} Left)` : ''}</span>
               </>
             ) : (
               <>
@@ -953,21 +1042,30 @@ export const CatchtheGift: React.FC = () => {
           </div>
 
           {canPlay ? (
-            <button
-              onClick={startGame}
-              className="bg-white hover:bg-emerald-50 text-[#386b0c] font-black px-8 py-3.5 rounded-full text-base shadow-xl inline-flex items-center gap-2.5 cursor-pointer transition-all hover:scale-105 border border-white"
-            >
-              <Play className="w-5 h-5 fill-[#386b0c]" />
-              <span>START GAME NOW</span>
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={startGame}
+                className="bg-white hover:bg-emerald-50 text-[#386b0c] font-black px-8 py-3.5 rounded-full text-base shadow-xl inline-flex items-center gap-2.5 cursor-pointer transition-all hover:scale-105 border border-white"
+              >
+                <Play className="w-5 h-5 fill-[#386b0c]" />
+                <span>START GAME NOW</span>
+              </button>
+              {maxPlays > 1 && (
+                <p className="text-xs text-sky-100 font-bold">
+                  {hasReplayTicket
+                    ? '1 Bonus Replay Ticket Active'
+                    : `${playsRemaining} of ${maxPlays} daily plays remaining (24-hour period)`}
+                </p>
+              )}
+            </div>
           ) : (
             <div className="space-y-3 max-w-sm mx-auto pt-1">
               <div className="inline-flex items-center gap-2 bg-black/40 backdrop-blur-md px-4 py-1.5 rounded-full border border-amber-300/40 text-amber-200 text-xs font-black">
                 <Clock className="w-4 h-4 text-amber-300 animate-spin" />
-                <span>Wait 24 Hours: {formatCountdown(remainingCooldown)}</span>
+                <span>Daily Limit Reached ({maxPlays}/{maxPlays}) — Resets in: {formatCountdown(remainingCooldown)}</span>
               </div>
               <p className="text-xs text-sky-100 font-medium leading-relaxed">
-                You reached your daily free play limit. Watch a short sponsored video to unlock an immediate replay ticket, or wait 24 hours to play again.
+                You reached your daily limit of {maxPlays} {maxPlays === 1 ? 'attempt' : 'attempts'} within a 24-hour period. Watch a sponsored video to unlock an immediate replay ticket, or wait for the cooldown to reset.
               </p>
               <button
                 onClick={openAdModal}
@@ -1301,22 +1399,41 @@ export const CatchtheGift: React.FC = () => {
               </div>
 
 
-              {/* 2. REPLAY RESTRICTION & AD VIDEO REQUIREMENT (PLAY AGAIN REMOVED) */}
+              {/* 2. REPLAY RESTRICTION & AD VIDEO REQUIREMENT */}
               <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/15 w-full max-w-xs text-center space-y-2">
-                <div className="flex items-center justify-center gap-1.5 text-amber-300 text-[11px] font-black">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Next Free Game in: {formatCountdown(remainingCooldown || 86400000)}</span>
-                </div>
-                <p className="text-[10px] sm:text-[11px] text-gray-200 leading-tight font-medium">
-                  To play again immediately, you must watch a short sponsored video. Otherwise, you must wait 24 hours.
-                </p>
-                <button
-                  onClick={openAdModal}
-                  className="w-full bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-slate-950 font-black py-2.5 px-3 rounded-xl text-xs shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-transform hover:scale-102 border border-amber-200"
-                >
-                  <Film className="w-4 h-4 fill-slate-950" />
-                  <span>WATCH AD VIDEO TO PLAY AGAIN</span>
-                </button>
+                {canPlay ? (
+                  <>
+                    <p className="text-xs text-white font-bold">
+                      {hasReplayTicket
+                        ? '1 Bonus Replay Ticket Active'
+                        : `${playsRemaining} of ${maxPlays} daily plays remaining (24-hour period)`}
+                    </p>
+                    <button
+                      onClick={startGame}
+                      className="w-full bg-[#488710] hover:bg-[#386b0c] text-white font-black py-2.5 px-3 rounded-xl text-xs shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-transform hover:scale-102"
+                    >
+                      <Play className="w-4 h-4 fill-white" />
+                      <span>PLAY NEXT ATTEMPT</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-center gap-1.5 text-amber-300 text-[11px] font-black">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Daily Limit Reached ({maxPlays}/{maxPlays}) • Next in: {formatCountdown(remainingCooldown || 86400000)}</span>
+                    </div>
+                    <p className="text-[10px] sm:text-[11px] text-gray-200 leading-tight font-medium">
+                      To play again immediately, watch a short sponsored video. Otherwise, wait 24 hours for your daily attempts to reset.
+                    </p>
+                    <button
+                      onClick={openAdModal}
+                      className="w-full bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-slate-950 font-black py-2.5 px-3 rounded-xl text-xs shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-transform hover:scale-102 border border-amber-200"
+                    >
+                      <Film className="w-4 h-4 fill-slate-950" />
+                      <span>WATCH AD VIDEO TO PLAY AGAIN</span>
+                    </button>
+                  </>
+                )}
               </div>
 
               {/* 3. EXIT GAME */}
@@ -1332,7 +1449,7 @@ export const CatchtheGift: React.FC = () => {
         </div>
       )}
 
-      {/* SPONSORED AD VIDEO MODAL */}
+      {/* SPONSORED AD VIDEO MODAL (NO SKIP OPTION) */}
       {showAdModal && (
         <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
           <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl text-white relative animate-scale-up flex flex-col">
@@ -1357,13 +1474,16 @@ export const CatchtheGift: React.FC = () => {
                   </span>
                 )}
 
-                <button
-                  onClick={handleCloseAd}
-                  className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-gray-300 hover:text-white transition-colors cursor-pointer"
-                  title="Close Ad"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                {/* Close button only available once video completes - no skip option */}
+                {adFinished && (
+                  <button
+                    onClick={handleCloseAd}
+                    className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-gray-300 hover:text-white transition-colors cursor-pointer"
+                    title="Close Ad"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1419,7 +1539,7 @@ export const CatchtheGift: React.FC = () => {
               </div>
             </div>
 
-            {/* Ad Video Footer Actions */}
+            {/* Ad Video Footer Actions (Video skip option removed) */}
             <div className="p-4 bg-slate-900 text-center space-y-2">
               {adFinished ? (
                 <button
@@ -1431,45 +1551,12 @@ export const CatchtheGift: React.FC = () => {
                 </button>
               ) : (
                 <div className="space-y-1">
-                  <p className="text-xs text-gray-400">
-                    Please watch until the timer reaches zero to unlock your replay ticket.
+                  <p className="text-xs text-gray-300 font-medium">
+                    Please watch the full video ({adTimer}s remaining) to unlock your replay ticket.
                   </p>
-                  <button
-                    onClick={handleCloseAd}
-                    className="text-[11px] text-gray-500 hover:text-gray-300 underline font-medium cursor-pointer"
-                  >
-                    Skip &amp; Wait 24 Hours
-                  </button>
                 </div>
               )}
             </div>
-
-            {/* Early Exit Confirmation Alert */}
-            {showEarlyExitPrompt && (
-              <div className="absolute inset-0 z-20 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center space-y-3 animate-scale-up">
-                <div className="w-12 h-12 rounded-full bg-rose-500/20 border-2 border-rose-400 flex items-center justify-center text-rose-400">
-                  <AlertTriangle className="w-6 h-6" />
-                </div>
-                <h4 className="text-base font-black text-white">Skip Ad Video?</h4>
-                <p className="text-xs text-gray-300 max-w-xs leading-relaxed">
-                  If you leave now without finishing the video, you will <strong className="text-rose-400">NOT receive a replay ticket</strong> and must wait <strong className="text-amber-300">24 hours</strong> before playing again.
-                </p>
-                <div className="flex items-center gap-2 pt-2 w-full max-w-xs">
-                  <button
-                    onClick={() => setShowEarlyExitPrompt(false)}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-3 rounded-xl text-xs cursor-pointer shadow-md"
-                  >
-                    Resume Video
-                  </button>
-                  <button
-                    onClick={confirmExitAdEarly}
-                    className="flex-1 bg-white/10 hover:bg-white/20 text-gray-300 font-bold py-2 px-3 rounded-xl text-xs cursor-pointer border border-white/15"
-                  >
-                    Exit (Wait 24h)
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}

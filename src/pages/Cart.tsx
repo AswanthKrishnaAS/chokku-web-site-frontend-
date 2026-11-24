@@ -22,7 +22,6 @@ import { useToast } from '../context/ToastContext';
 import { useCategories } from '../context/CategoryContext';
 import { CartItem } from '../components/CartItem';
 import { Button } from '../components/Button';
-import { TreasureCoin } from '../components/TreasureCoin';
 
 export const Cart: React.FC = () => {
   const { customerUser, user } = useAuth();
@@ -142,8 +141,6 @@ export const Cart: React.FC = () => {
           )}
         </div>
 
-        {/* Treasure Coin support */}
-        <TreasureCoin pageId="cart" />
       </div>
     );
   }
@@ -470,8 +467,6 @@ export const Cart: React.FC = () => {
         </div>
       )}
 
-      {/* Golden Treasure Coin for Shopping Cart Page */}
-      <TreasureCoin pageId="cart" />
     </div>
   );
 };

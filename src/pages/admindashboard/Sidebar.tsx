@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
+  BarChart3,
   Users,
   ShoppingBag,
   Package,
@@ -56,9 +57,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Determine active item based on route or activeSection prop
   const currentPath = location.pathname;
   const isProductsPage = currentPath.includes('/admin-dashboard/products') || activeSection === 'products';
+  const isReportsPage = currentPath.includes('/admin-dashboard/reports') || activeSection === 'reports';
 
   const navMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/admin-dashboard' },
+    { id: 'reports', label: 'Reports & Analytics', icon: BarChart3, path: '/admin-dashboard/reports' },
     { id: 'customers', label: 'Customers', icon: Users, path: '/admin-dashboard' },
     { id: 'home-slider', label: 'Homepage Slider', icon: Sliders, path: '/admin-dashboard' },
     { id: 'products', label: 'Products', icon: Package, badge: products.length.toString(), path: '/admin-dashboard/products' },
@@ -91,6 +94,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const isActive =
                 item.id === 'products'
                   ? isProductsPage
+                  : item.id === 'reports'
+                  ? isReportsPage
                   : currentPath === item.path && activeSection === item.id;
 
               return (
@@ -366,6 +371,23 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           {/* Right Action Icons & Admin Profile */}
           <div className="flex items-center gap-3">
             
+            {/* Live View Header Button */}
+            <button
+              onClick={() => navigate('/admin-dashboard/reports')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                activeSection === 'reports'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300 shadow-2xs font-extrabold'
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-[#f0f9e8] hover:text-[#488710] hover:border-[#d2ea9d]'
+              }`}
+              title="Real-Time Live View & Visitor Analytics"
+            >
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <span>Live View</span>
+            </button>
+
             {/* View Storefront Link */}
             <button
               onClick={() => navigate('/')}

@@ -15,7 +15,8 @@ import {
   Flame,
   Award,
   Zap,
-  ShoppingBag
+  ShoppingBag,
+  Target
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -217,8 +218,8 @@ export const PlayAndWin: React.FC = () => {
           </p>
         </div>
 
-        {/* 4. GAME CARDS GRID (2 Featured Games) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+        {/* 4. GAME CARDS GRID (3 Featured Games) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
 
           {/* CARD 1: Catch the Gift */}
           <div
@@ -288,8 +289,70 @@ export const PlayAndWin: React.FC = () => {
             </Link>
           </div>
 
+          {/* CARD 3: Chokku Carroms */}
+          <div
+            onClick={(e) => handleGameLaunch(e, '/carroms', 'Carroms')}
+            className="bg-white rounded-3xl border border-gray-100 hover:border-amber-300 p-4 sm:p-5 shadow-2xs hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group cursor-pointer active:scale-98"
+          >
+            <div className="w-full h-44 sm:h-52 rounded-2xl bg-gradient-to-br from-[#fff7ed] via-[#fef3c7] to-[#fed7aa] flex items-center justify-center relative border border-amber-200/80 p-3 overflow-hidden shadow-inner">
+              <div className="absolute inset-0 bg-[radial-gradient(#d97706_1px,transparent_1px)] [background-size:14px_14px] opacity-15 pointer-events-none" />
+              <div className="w-32 h-32 rounded-full bg-white/70 blur-xl absolute pointer-events-none" />
+              
+              {/* Badge */}
+              <div className="absolute top-2.5 right-2.5 z-20 bg-amber-500 text-amber-950 font-black text-[9px] uppercase px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1">
+                <Sparkles className="w-2.5 h-2.5" />
+                <span>NEW</span>
+              </div>
 
+              {/* Styled Carrom Board Visual Graphic */}
+              <div className="relative z-10 w-32 h-32 sm:w-36 sm:h-36 rounded-2xl bg-[#3e1a06] p-2 shadow-2xl border-2 border-[#854215] transform group-hover:scale-108 group-hover:rotate-2 transition-transform duration-300 flex items-center justify-center">
+                {/* Playing Surface */}
+                <div className="w-full h-full rounded-xl bg-gradient-to-br from-[#fef9e7] to-[#ebdcb4] relative overflow-hidden flex items-center justify-center border border-[#c2883f]/60">
+                  {/* 4 Corner Pockets */}
+                  <div className="w-3.5 h-3.5 rounded-full bg-[#1e1e1e] border border-[#c2883f] absolute top-1 left-1" />
+                  <div className="w-3.5 h-3.5 rounded-full bg-[#1e1e1e] border border-[#c2883f] absolute top-1 right-1" />
+                  <div className="w-3.5 h-3.5 rounded-full bg-[#1e1e1e] border border-[#c2883f] absolute bottom-1 left-1" />
+                  <div className="w-3.5 h-3.5 rounded-full bg-[#1e1e1e] border border-[#c2883f] absolute bottom-1 right-1" />
+                  
+                  {/* Center Circle & Queen */}
+                  <div className="w-10 h-10 rounded-full border border-red-600/60 flex items-center justify-center">
+                    <div className="w-3.5 h-3.5 rounded-full bg-gradient-to-br from-rose-500 to-red-700 shadow-md border border-amber-300 flex items-center justify-center">
+                      <div className="w-1 h-1 rounded-full bg-amber-300" />
+                    </div>
+                  </div>
 
+                  {/* Carrom Coins Around Queen */}
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-100 border border-amber-400 absolute top-7 left-9 shadow-xs" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-gray-800 border border-gray-600 absolute top-7 right-9 shadow-xs" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-gray-800 border border-gray-600 absolute bottom-7 left-9 shadow-xs" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-100 border border-amber-400 absolute bottom-7 right-9 shadow-xs" />
+
+                  {/* Striker */}
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-white via-slate-200 to-slate-400 border border-amber-500 absolute bottom-2 shadow-lg flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-center my-3">
+              <h3 className="font-black text-gray-900 text-sm sm:text-base">Chokku Carroms</h3>
+              <p className="text-gray-500 text-[11px] sm:text-xs font-medium mt-1 leading-snug">
+                Flick the striker, pocket coins &amp; Queen to win store points!
+              </p>
+            </div>
+
+            <Link
+              to="/carroms"
+              onClick={(e) => handleGameLaunch(e, '/carroms', 'Carroms')}
+              className="w-full bg-amber-50 hover:bg-amber-500 text-amber-900 hover:text-white font-extrabold rounded-full py-2.5 px-4 text-xs flex items-center justify-between border border-amber-200 transition-all cursor-pointer shadow-2xs active:scale-95"
+            >
+              <span>Play Now</span>
+              <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center group-hover:bg-white group-hover:text-amber-500 transition-colors">
+                <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
+              </div>
+            </Link>
+          </div>
 
         </div>
 

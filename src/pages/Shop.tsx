@@ -7,7 +7,6 @@ import { Filter, FilterState } from '../components/Filter';
 import { CATEGORIES } from '../data/categories';
 import { useProducts } from '../context/ProductContext';
 import { useCategories } from '../context/CategoryContext';
-import { TreasureCoin } from '../components/TreasureCoin';
 
 export const Shop: React.FC = () => {
   const { products: storeProducts } = useProducts();
@@ -330,8 +329,6 @@ export const Shop: React.FC = () => {
 
       </div>
 
-      {/* Golden Treasure Coin for Shop Page */}
-      <TreasureCoin pageId="shop" />
     </div>
   );
 };

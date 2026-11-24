@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ShoppingBag,
@@ -12,6 +12,9 @@ import {
   Mail,
   ChevronDown,
   ShieldCheck,
+  Sparkles,
+  Coins,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -24,7 +27,18 @@ export const Login: React.FC = () => {
   const { addToast } = useToast();
 
   // Main Tab State: 'signin' or 'signup'
-  const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
+  const [activeTab, setActiveTab] = useState<'signin' | 'signup'>(() => {
+    if (location.state?.tab === 'signup') return 'signup';
+    return 'signin';
+  });
+
+  useEffect(() => {
+    if (location.state?.tab === 'signup') {
+      setActiveTab('signup');
+    } else if (location.state?.tab === 'signin') {
+      setActiveTab('signin');
+    }
+  }, [location.state]);
 
   // Sign In Form state
   const [username, setUsername] = useState('');
@@ -37,6 +51,15 @@ export const Login: React.FC = () => {
   const [signUpStep, setSignUpStep] = useState<'enter_phone' | 'enter_details'>('enter_phone');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [countryCode, setCountryCode] = useState('+91');
+
+  // Check if current user entered from Buy Now flow
+  const isBuyNowFlow = Boolean(
+    location.state?.buyNowProductId ||
+    location.state?.returnUrl?.includes('buynow') ||
+    sessionStorage.getItem('chokku_buy_now_product_id') ||
+    sessionStorage.getItem('chokku_buy_now_item_v1') ||
+    new URLSearchParams(location.search).get('mode') === 'buynow'
+  );
 
   // Registration Details Form state
   const [regName, setRegName] = useState('');
@@ -57,6 +80,17 @@ export const Login: React.FC = () => {
     if (returnUrl) return returnUrl;
     if (buyNowProductId) return `/product/${buyNowProductId}?autoBuy=true`;
     return '/profile';
+  };
+
+  // Handle Close (X) button click
+  const handleClose = () => {
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else if (location.state?.returnUrl && location.state.returnUrl !== '/login') {
+      navigate(location.state.returnUrl);
+    } else {
+      navigate('/');
+    }
   };
 
   // Handle Sign In Submit
@@ -122,8 +156,8 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-[calc(100vh-130px)] flex flex-col justify-start lg:justify-center items-center px-4 pt-3 pb-28 sm:px-6 sm:py-8 lg:p-10 bg-[#f8faf7]/60 sm:bg-[#f8faf7] font-sans">
-      <div className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+    <div className="w-full flex-1 min-h-[calc(100dvh-4rem)] lg:min-h-[calc(100vh-130px)] flex flex-col justify-center items-center px-4 py-8 sm:px-6 sm:py-10 lg:p-10 bg-[#f8faf7]/60 sm:bg-[#f8faf7] font-sans">
+      <div className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center my-auto">
         
         {/* LEFT COLUMN: REFERENCE IMAGE DISPLAY (Hidden on Mobile, Visible on Desktop) */}
         <div className="hidden lg:flex lg:col-span-6 justify-center items-center p-4">
@@ -136,7 +170,16 @@ export const Login: React.FC = () => {
 
         {/* RIGHT COLUMN: AUTHENTICATION CARD */}
         <div className="w-full lg:col-span-6 flex justify-center">
-          <div className="w-full max-w-md bg-white rounded-3xl sm:rounded-[32px] p-5 sm:p-8 lg:p-9 shadow-xl shadow-gray-200/70 border border-gray-100 transition-all duration-300">
+          <div className="relative w-full max-w-md bg-white rounded-3xl sm:rounded-[32px] p-5 sm:p-8 lg:p-9 shadow-xl shadow-gray-200/70 border border-gray-100 transition-all duration-300">
+            {/* Close (X) Button */}
+            <button
+              type="button"
+              onClick={handleClose}
+              className="absolute top-4 right-4 sm:top-5 sm:right-5 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 flex items-center justify-center transition-all cursor-pointer z-10 hover:scale-105 active:scale-95"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4 sm:w-4.5 sm:h-4.5 stroke-[2.2]" />
+            </button>
             
             {/* Top Green Bag Icon Badge */}
             <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl sm:rounded-[22px] bg-gradient-to-br from-[#f0f9e8] to-[#e1f3cd] border border-[#cbe595] mx-auto flex items-center justify-center shadow-xs mb-3.5 sm:mb-5 transition-transform hover:scale-105">
@@ -162,6 +205,23 @@ export const Login: React.FC = () => {
                   : 'Enter your details to finish registration'}
               </p>
             </div>
+
+                        {/* Buy Now Notification Banner if redirected */}
+            {isBuyNowFlow && (
+              <div className="mb-5 bg-gradient-to-r from-amber-50 via-yellow-50 to-amber-50 border border-amber-300 rounded-2xl p-3.5 shadow-xs animate-fade-in">
+                <div className="flex items-start gap-2.5 text-amber-950">
+                  <div className="w-8 h-8 rounded-xl bg-amber-200/80 border border-amber-300 flex items-center justify-center shrink-0 mt-0.5">
+                    <Coins className="w-4.5 h-4.5 fill-amber-400 text-amber-800" />
+                  </div>
+                  <div className="flex-1 text-left text-xs">
+                    <p className="font-black text-amber-950 text-sm">Fast Track Buy Now</p>
+                    <p className="text-[11px] text-amber-900 leading-snug mt-0.5">
+                      Sign in or create an account to earn <strong>100 Bonus Coins</strong> and continue your purchase!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Mode Switch Tabs (Sign In vs Sign Up) */}
             <div className="bg-gray-100/80 p-1 rounded-2xl border border-gray-200/60 flex items-center mb-5 sm:mb-6">
@@ -514,6 +574,7 @@ export const Login: React.FC = () => {
                 </>
               )}
             </div>
+
 
             {/* Trust badge */}
             <div className="flex items-center justify-center gap-1.5 text-[11px] text-gray-400 font-medium mt-3.5">

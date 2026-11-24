@@ -21,6 +21,7 @@ import {
   Disc,
   ShoppingBag,
   Filter,
+  Target,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -57,7 +58,7 @@ export const Points: React.FC = () => {
   const [transactions, setTransactions] = useState<WalletTransactionItem[]>([]);
   const [totalSpinCoins, setTotalSpinCoins] = useState<number>(0);
   const [totalCatchPoints, setTotalCatchPoints] = useState<number>(0);
-  const [activeFilter, setActiveFilter] = useState<'ALL' | 'SPIN_AND_WIN' | 'CATCH_THE_GIFT' | 'CONVERSION' | 'PURCHASE_REDEEM'>('ALL');
+  const [activeFilter, setActiveFilter] = useState<'ALL' | 'SPIN_AND_WIN' | 'CATCH_THE_GIFT' | 'CARROM_GAME' | 'CONVERSION' | 'PURCHASE_REDEEM'>('ALL');
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -466,6 +467,17 @@ export const Points: React.FC = () => {
               <span>({transactions.filter((t) => t.type === 'CATCH_THE_GIFT').length})</span>
             </button>
             <button
+              onClick={() => setActiveFilter('CARROM_GAME')}
+              className={`px-3 py-1.5 rounded-xl font-extrabold text-[11px] transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1 ${
+                activeFilter === 'CARROM_GAME'
+                  ? 'bg-orange-600 text-white shadow-xs'
+                  : 'bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-200/60'
+              }`}
+            >
+              <span>🎯 Carroms</span>
+              <span>({transactions.filter((t) => t.type === 'CARROM_GAME' || t.type === 'CARROM').length})</span>
+            </button>
+            <button
               onClick={() => setActiveFilter('CONVERSION')}
               className={`px-3 py-1.5 rounded-xl font-extrabold text-[11px] transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1 ${
                 activeFilter === 'CONVERSION'
@@ -507,6 +519,7 @@ export const Points: React.FC = () => {
                 .map((tx) => {
                   const isSpin = tx.type === 'SPIN_AND_WIN';
                   const isCatch = tx.type === 'CATCH_THE_GIFT';
+                  const isCarrom = tx.type === 'CARROM_GAME' || tx.type === 'CARROM';
                   const isConversion = tx.type === 'CONVERSION';
                   const isRedeem = tx.type === 'PURCHASE_REDEEM';
 
@@ -520,6 +533,8 @@ export const Points: React.FC = () => {
                               ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white'
                               : isCatch
                               ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 text-white'
+                              : isCarrom
+                              ? 'bg-gradient-to-br from-orange-500 to-amber-700 text-white'
                               : isConversion
                               ? 'bg-gradient-to-br from-purple-500 to-indigo-600 text-white'
                               : 'bg-gradient-to-br from-rose-500 to-rose-700 text-white'
@@ -529,6 +544,8 @@ export const Points: React.FC = () => {
                             <Disc className="w-4 h-4 text-white" />
                           ) : isCatch ? (
                             <Gift className="w-4 h-4 text-white" />
+                          ) : isCarrom ? (
+                            <Target className="w-4 h-4 text-white" />
                           ) : isConversion ? (
                             <RefreshCw className="w-4 h-4 text-white" />
                           ) : (
@@ -547,6 +564,8 @@ export const Points: React.FC = () => {
                                   ? 'bg-amber-100 text-amber-900 border border-amber-200'
                                   : isCatch
                                   ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                                  : isCarrom
+                                  ? 'bg-orange-100 text-orange-900 border border-orange-200'
                                   : isConversion
                                   ? 'bg-purple-100 text-purple-900 border border-purple-200'
                                   : 'bg-rose-100 text-rose-900 border border-rose-200'
@@ -556,6 +575,8 @@ export const Points: React.FC = () => {
                                 ? 'Spin & Win'
                                 : isCatch
                                 ? 'Catch Game'
+                                : isCarrom
+                                ? 'Carroms'
                                 : isConversion
                                 ? 'Conversion'
                                 : 'Redeemed'}

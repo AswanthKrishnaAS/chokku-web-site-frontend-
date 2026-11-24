@@ -14,10 +14,11 @@
   * {
     font-family: 'Josefin Sans', sans-serif;
   }
-  body {
+  html, body {
     background-color: #ffffff;
     color: #1f2937;
     font-family: 'Josefin Sans', sans-serif;
+    overflow-x: hidden;
   }
 }
 
@@ -155,4 +156,72 @@ body.hide-bottom-nav .fixed.bottom-0 {
   transition: opacity 0.3s ease-in-out;
   will-change: opacity;
 }
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Top Container Monkey Mascot Full-Screen Mobile Entrance */
+@keyframes marqueeMonkeyFullMobile {
+  0% {
+    transform: translate(60vw, -30vh) scale(0.9);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  68% {
+    transform: translate(-10px, 6px) scale(1.02);
+  }
+  84% {
+    transform: translate(3px, -2px) scale(0.99);
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-marquee-monkey-fullscreen {
+  animation: marqueeMonkeyFullMobile 1.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+  transform-origin: top right;
+}
+
+/* 10-Second Mascot Modal Auto-Close Timer Bar */
+@keyframes modal10sTimer {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.animate-modal-10s-timer {
+  animation: modal10sTimer 10s linear forwards;
+}
+
+/* Modal Smooth Fade-Out & Scale-Down Exit Animation */
+@keyframes modalFadeOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.animate-modal-fade-out {
+  animation: modalFadeOut 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 

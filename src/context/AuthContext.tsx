@@ -3,6 +3,7 @@ import { User, Order, SavedAddress } from '../types';
 import { useToast } from './ToastContext';
 import { socket } from '../socket';
 import { safeFetch } from '../utils/api';
+import { trackEvent } from '../utils/analyticsTracker';
 
 interface RegisterData {
   name: string;
@@ -92,7 +93,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    try {
+      const key = customerUser ? getCustomerOrdersKey(customerUser) : 'chokku_orders_guest';
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [isOrdersLoading, setIsOrdersLoading] = useState<boolean>(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
 
@@ -350,6 +359,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Fetch Orders for Current Logged-In Customer from MongoDB API
   const fetchMyOrders = async () => {
     if (!customerUser) {
+      try {
+        const saved = localStorage.getItem('chokku_orders_guest');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            setOrders(parsed);
+            setIsOrdersLoading(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('LocalStorage guest orders parse error:', err);
+      }
       setOrders([]);
       setIsOrdersLoading(false);
       return;
@@ -723,6 +745,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: 'customer',
       };
       setCustomerUser(newUser);
+      setCustomerPoints(100);
       saveCustomerToStorage({
         ...newUser,
         email: data.email || '',
@@ -774,6 +797,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Emit real-time WebSocket event for instant Admin Dashboard notification
         socket.emit('new_order', order);
+        trackEvent({ eventType: 'checkout_complete', orderId: order.id, orderAmount: order.totalAmount });
       } catch (e) {
         console.error('Failed to save order to localStorage', e);
       }

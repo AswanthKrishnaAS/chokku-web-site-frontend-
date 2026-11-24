@@ -219,11 +219,13 @@ export const SpinandWin: React.FC = () => {
   const [showCouponsModal, setShowCouponsModal] = useState(false);
   const [myCoupons, setMyCoupons] = useState<SavedCoupon[]>([]);
 
-  // Daily Spin Cooldown Tracking
+  // Configured spin limit per user from dashboard settings
+  const maxSpins = Math.max(1, spinGameSettings?.dailyFreeSpins || 1);
   const [lastSpinTime, setLastSpinTime] = useState<number>(0);
   const [countdownText, setCountdownText] = useState<string>('');
   const [isDailyFreeSpinAvailable, setIsDailyFreeSpinAvailable] = useState<boolean>(true);
   const [spinsCountToday, setSpinsCountToday] = useState<number>(0);
+  const [spinsRemaining, setSpinsRemaining] = useState<number>(maxSpins);
 
   // Canvas Confetti ref
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -251,7 +253,48 @@ export const SpinandWin: React.FC = () => {
   // Cooldown check for daily free spin with backend synchronization
   const userIdKey = customerUser?.id || (customerUser as any)?._id || 'guest_user';
 
-  // Sync server-side status on mount or when customer changes
+  // Helper to read stored timestamps within the rolling 24-hour window
+  const getStoredSpinTimestamps = useCallback((): number[] => {
+    try {
+      const raw = localStorage.getItem(`chokku_spin_timestamps_${userIdKey}`);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          const windowMs = 24 * 60 * 60 * 1000;
+          const cutoff = Date.now() - windowMs;
+          return arr.filter((t: any) => typeof t === 'number' && t > cutoff);
+        }
+      }
+      // Migration from legacy single-timestamp key
+      const legacy = localStorage.getItem(`chokku_spin_last_${userIdKey}`);
+      if (legacy) {
+        const t = parseInt(legacy, 10);
+        const windowMs = 24 * 60 * 60 * 1000;
+        if (t && Date.now() - t < windowMs) {
+          return [t];
+        }
+      }
+    } catch (e) {
+      console.warn('Error reading spin timestamps:', e);
+    }
+    return [];
+  }, [userIdKey]);
+
+  const saveSpinTimestamps = useCallback(
+    (timestamps: number[]) => {
+      try {
+        localStorage.setItem(`chokku_spin_timestamps_${userIdKey}`, JSON.stringify(timestamps));
+        if (timestamps.length > 0) {
+          localStorage.setItem(`chokku_spin_last_${userIdKey}`, timestamps[timestamps.length - 1].toString());
+        }
+      } catch (e) {
+        console.warn('Error saving spin timestamps:', e);
+      }
+    },
+    [userIdKey]
+  );
+
+  // Sync server-side status on mount or when customer/settings change
   useEffect(() => {
     const fetchServerSpinStatus = async () => {
       if (!customerUser) return;
@@ -266,6 +309,15 @@ export const SpinandWin: React.FC = () => {
           },
         });
         if (res.ok && res.isJson && res.data?.success) {
+          const srvMax = typeof res.data.maxSpins === 'number' ? res.data.maxSpins : maxSpins;
+          const srvUsed = typeof res.data.spinsUsed === 'number' ? res.data.spinsUsed : 0;
+          const srvRemaining = typeof res.data.spinsRemaining === 'number'
+            ? res.data.spinsRemaining
+            : Math.max(0, srvMax - srvUsed);
+
+          setSpinsCountToday(srvUsed);
+          setSpinsRemaining(srvRemaining);
+
           if (res.data.canSpin === false && res.data.remainingMs > 0) {
             setIsDailyFreeSpinAvailable(false);
             const remaining = res.data.remainingMs;
@@ -277,9 +329,8 @@ export const SpinandWin: React.FC = () => {
             );
             if (res.data.lastSpinAt) {
               setLastSpinTime(new Date(res.data.lastSpinAt).getTime());
-              localStorage.setItem(`chokku_spin_last_${userIdKey}`, new Date(res.data.lastSpinAt).getTime().toString());
             }
-          } else if (res.data.canSpin === true) {
+          } else if (res.data.canSpin === true || srvRemaining > 0) {
             setIsDailyFreeSpinAvailable(true);
             setCountdownText('');
           }
@@ -290,34 +341,32 @@ export const SpinandWin: React.FC = () => {
     };
 
     fetchServerSpinStatus();
-  }, [customerUser, userIdKey]);
+  }, [customerUser, userIdKey, maxSpins]);
 
   useEffect(() => {
     const checkCooldown = () => {
       try {
-        const stored = localStorage.getItem(`chokku_spin_last_${userIdKey}`);
-        if (stored) {
-          const timestamp = parseInt(stored, 10);
-          setLastSpinTime(timestamp);
-          const diffMs = Date.now() - timestamp;
-          const twentyFourHours = 24 * 60 * 60 * 1000;
+        const valid = getStoredSpinTimestamps();
+        const used = valid.length;
+        const remaining = Math.max(0, maxSpins - used);
 
-          if (diffMs < twentyFourHours) {
-            setIsDailyFreeSpinAvailable(false);
-            const remaining = twentyFourHours - diffMs;
-            const hours = Math.floor(remaining / (1000 * 60 * 60));
-            const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
-            setCountdownText(
-              `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-            );
-          } else {
-            setIsDailyFreeSpinAvailable(true);
-            setCountdownText('');
-          }
-        } else {
+        setSpinsCountToday(used);
+        setSpinsRemaining(remaining);
+
+        if (remaining > 0) {
           setIsDailyFreeSpinAvailable(true);
           setCountdownText('');
+        } else {
+          setIsDailyFreeSpinAvailable(false);
+          const windowMs = 24 * 60 * 60 * 1000;
+          const oldest = valid[0] || Date.now();
+          const diffMs = Math.max(0, (oldest + windowMs) - Date.now());
+          const hours = Math.floor(diffMs / (1000 * 60 * 60));
+          const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+          const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+          setCountdownText(
+            `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+          );
         }
       } catch (err) {
         console.error(err);
@@ -327,7 +376,7 @@ export const SpinandWin: React.FC = () => {
     checkCooldown();
     const interval = setInterval(checkCooldown, 1000);
     return () => clearInterval(interval);
-  }, [userIdKey]);
+  }, [userIdKey, maxSpins, getStoredSpinTimestamps]);
 
   // Web Audio Mechanical Tick Sound
   const playTickSound = useCallback(() => {
@@ -558,6 +607,16 @@ export const SpinandWin: React.FC = () => {
 
     if (isSpinning) return;
 
+    // Check if daily spin limit has been reached
+    if (!isDailyFreeSpinAvailable && !isTestMode) {
+      addToast(
+        'Daily Spin Limit Reached',
+        `You have used all ${maxSpins} spins for today. Next spin resets in ${countdownText || 'a few hours'}.`,
+        'warning'
+      );
+      return;
+    }
+
     setIsSpinning(true);
     setWonPrize(null);
     setShowWinModal(false);
@@ -578,15 +637,23 @@ export const SpinandWin: React.FC = () => {
         setIsSpinning(false);
         if (res.alreadySpun) {
           setIsDailyFreeSpinAvailable(false);
+          setSpinsRemaining(0);
           addToast(
             'Daily Spin Limit Reached',
-            res.message || 'You have already claimed your daily free spin! Come back tomorrow.',
+            res.message || `You have already used all ${maxSpins} spins for today! Come back tomorrow.`,
             'warning'
           );
         } else {
-          addToast('Spin Alert', res.message || 'Unable to spin at this moment. Please try again.', 'error');
+          addToast('Notification', res.message || 'Unable to spin at this moment. Please try again.', 'error');
         }
         return;
+      }
+
+      if (typeof res.spinsRemaining === 'number') {
+        setSpinsRemaining(res.spinsRemaining);
+      }
+      if (typeof res.spinsUsed === 'number') {
+        setSpinsCountToday(res.spinsUsed);
       }
 
       if (typeof res.winningSlotIndex === 'number') {
@@ -639,16 +706,28 @@ export const SpinandWin: React.FC = () => {
       const prize = currentSlices[winningIndex];
       setWonPrize(prize);
       setShowWinModal(true);
-      setSpinsCountToday((prev) => prev + 1);
 
       // Play winning sounds
       playFanfareSound();
 
-      // Record cooldown timestamp for daily spin
+      // Record this spin timestamp and recalculate remaining spins
       const now = Date.now();
-      localStorage.setItem(`chokku_spin_last_${userIdKey}`, now.toString());
+      const currentTimestamps = getStoredSpinTimestamps();
+      const nextTimestamps = [...currentTimestamps, now];
+      saveSpinTimestamps(nextTimestamps);
       setLastSpinTime(now);
-      setIsDailyFreeSpinAvailable(false);
+
+      const newSpinsUsed = nextTimestamps.length;
+      const newRemaining = Math.max(0, maxSpins - newSpinsUsed);
+      setSpinsCountToday(newSpinsUsed);
+      setSpinsRemaining(newRemaining);
+
+      if (newRemaining > 0) {
+        setIsDailyFreeSpinAvailable(true);
+        setCountdownText('');
+      } else {
+        setIsDailyFreeSpinAvailable(false);
+      }
 
       // 1. If prize is a Coupon / Voucher
       if (prize.code || ['free_delivery', 'discount', 'bonus', 'jackpot'].includes(prize.type)) {
@@ -804,7 +883,7 @@ export const SpinandWin: React.FC = () => {
                   <span className="text-[#0284c7]">LUCKY SPIN</span>
                   <span className="text-[#488710]">&amp; WIN</span>
                   <span className="text-xs bg-amber-400 text-amber-950 font-black px-2.5 py-0.5 rounded-full uppercase shadow-xs">
-                    FREE DAILY
+                    {maxSpins > 1 ? `${maxSpins} SPINS / 24H` : 'FREE DAILY'}
                   </span>
                 </h1>
                 <p className="text-xs sm:text-sm text-gray-600 font-medium mt-1.5 max-w-lg leading-relaxed">
@@ -817,12 +896,12 @@ export const SpinandWin: React.FC = () => {
                 {isDailyFreeSpinAvailable ? (
                   <div className="inline-flex items-center gap-1.5 bg-emerald-100/90 text-emerald-800 text-[11px] font-black px-3 py-1 rounded-full border border-emerald-300 shadow-xs">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                    <span>1 FREE DAILY SPIN READY</span>
+                    <span>{spinsRemaining} OF {maxSpins} FREE SPINS READY</span>
                   </div>
                 ) : (
                   <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-900 text-[11px] font-black px-3 py-1 rounded-full border border-amber-300">
                     <Clock className="w-3.5 h-3.5 text-amber-600" />
-                    <span>NEXT FREE SPIN IN: {countdownText}</span>
+                    <span>DAILY LIMIT REACHED ({maxSpins}/{maxSpins}) • RESETS IN: {countdownText}</span>
                   </div>
                 )}
                 <span className="text-[11px] text-gray-500 font-semibold">
@@ -1061,13 +1140,15 @@ export const SpinandWin: React.FC = () => {
             
             {/* Big Spin Action Button */}
             <button
-              disabled={isSpinning}
+              disabled={isSpinning || (!isDailyFreeSpinAvailable && !isTestMode && !!customerUser)}
               onClick={spinTheWheel}
               className={`w-full py-4 px-6 rounded-full font-black text-sm sm:text-base tracking-wider uppercase transition-all duration-300 shadow-lg cursor-pointer flex items-center justify-center gap-2.5 border active:scale-95 ${
                 isSpinning
                   ? 'bg-slate-700 text-slate-300 border-slate-600 cursor-not-allowed opacity-90'
                   : !customerUser && !isTestMode
                   ? 'bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white border-amber-400 shadow-amber-500/25 hover:shadow-xl hover:-translate-y-0.5'
+                  : !isDailyFreeSpinAvailable && !isTestMode
+                  ? 'bg-gray-400 text-gray-100 border-gray-400 cursor-not-allowed shadow-none'
                   : 'bg-gradient-to-r from-[#0284c7] via-sky-600 to-[#488710] hover:from-sky-700 hover:to-emerald-700 text-white border-sky-300/60 shadow-sky-500/25 hover:shadow-xl hover:-translate-y-0.5'
               }`}
             >
@@ -1078,8 +1159,8 @@ export const SpinandWin: React.FC = () => {
                   : !customerUser && !isTestMode
                   ? 'LOG IN OR SIGN UP TO PLAY'
                   : isDailyFreeSpinAvailable
-                  ? 'SPIN WHEEL FOR FREE NOW'
-                  : 'SPIN AGAIN (BONUS SPIN)'}
+                  ? `SPIN WHEEL FOR FREE (${spinsRemaining} LEFT)`
+                  : `DAILY LIMIT REACHED • RESETS IN ${countdownText}`}
               </span>
             </button>
 
@@ -1092,8 +1173,8 @@ export const SpinandWin: React.FC = () => {
                   : !customerUser && !isTestMode
                   ? 'Sign in to spin the wheel and claim guaranteed discount coupons & points!'
                   : isDailyFreeSpinAvailable
-                  ? 'Tap the button above to claim your free reward!'
-                  : `Next official daily free spin resets in: ${countdownText}`}
+                  ? `You have ${spinsRemaining} of ${maxSpins} daily spins remaining. Tap to spin!`
+                  : `All ${maxSpins} daily spins used. Next spin resets in: ${countdownText}`}
               </span>
             </div>
 
@@ -1157,10 +1238,10 @@ export const SpinandWin: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-xs">
             <div className="bg-[#f8fbf5] rounded-2xl p-3.5 border border-emerald-100/80 space-y-1">
               <div className="font-extrabold text-[#488710] flex items-center gap-1.5 text-sm">
-                <span>1. Free Daily Spin</span>
+                <span>1. Free Daily Spins</span>
               </div>
               <p className="text-gray-600 leading-relaxed font-medium">
-                Every Chokku user receives 1 free spin every 24 hours. Spin anytime from mobile or desktop!
+                Every Chokku user receives {maxSpins} free {maxSpins > 1 ? 'spins' : 'spin'} within each 24-hour period. Spin anytime from mobile or desktop!
               </p>
             </div>
 
