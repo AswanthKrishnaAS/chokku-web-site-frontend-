@@ -6,7 +6,6 @@ import { useCategories } from '../context/CategoryContext';
 import { useProducts } from '../context/ProductContext';
 import { ProductCard } from '../components/ProductCard';
 import { ArrowLeft, Tag, SlidersHorizontal, Loader2 } from 'lucide-react';
-import { TreasureCoin } from '../components/TreasureCoin';
 
 export const CategoryPage: React.FC = () => {
   const { category: categorySlug } = useParams<{ category: string }>();
@@ -142,8 +141,6 @@ export const CategoryPage: React.FC = () => {
 
       </div>
 
-      {/* Golden Treasure Coin for Category Page */}
-      <TreasureCoin pageId="category" />
     </div>
   );
 };

@@ -34,6 +34,7 @@ import { Orders } from './pages/Orders';
 import { PlayAndWin } from './pages/PlayAndWin';
 import { CatchtheGift } from './pages/CatchtheGift';
 import { SpinandWin } from './pages/SpinandWin';
+import { Carroms } from './pages/Carroms';
 import { NotFound } from './pages/NotFound';
 import { AdminLogin } from './pages/admindashboard/AdminLogin';
 import { AdminDashboard } from './pages/admindashboard/AdminDashboard';
@@ -41,7 +42,9 @@ import { ProductList } from './pages/admindashboard/product/ProductList';
 import { ProductAdd } from './pages/admindashboard/product/ProductAdd';
 import { ProductEdit } from './pages/admindashboard/product/ProductEdit';
 import { ProductView } from './pages/admindashboard/product/ProductView';
+import { ReportsAnalytics } from './pages/admindashboard/reports/ReportsAnalytics';
 import { AdminProtectedRoute } from './components/AdminProtectedRoute';
+import { useVisitorTracking } from './hooks/useVisitorTracking';
 
 // Scroll To Top on route transition
 const ScrollToTop = () => {
@@ -54,21 +57,25 @@ const ScrollToTop = () => {
 
 // Main App Layout with conditional Navbar and Footer rendering
 const AppLayout: React.FC = () => {
+  useVisitorTracking();
   const { pathname } = useLocation();
   const { isServerConnected } = useServerStatus();
   const { products: storeProducts } = useProducts();
   
-  // Hide Navbar & Footer on Admin pages or when server is busy without any cached catalog
+  // Hide Navbar & Footer on Admin pages, Carroms full-screen game, or when server is busy
+  const isCarromsGame = pathname === '/carroms' || pathname === '/carrom';
   const isServerBusyScreen = !isServerConnected && storeProducts.length === 0;
-  const hideHeaderFooter = pathname.startsWith('/admin') || isServerBusyScreen;
+  const hideHeaderFooter = pathname.startsWith('/admin') || isServerBusyScreen || isCarromsGame;
   const isCheckout = pathname === '/checkout';
-  const hideFooter = hideHeaderFooter || isCheckout;
-  const hideBottomNav = hideHeaderFooter || isCheckout;
+  const isLoginPage = pathname.toLowerCase().replace(/\/+$/, '') === '/login';
+  const hideFooter = hideHeaderFooter || isCheckout || isLoginPage || isCarromsGame;
+  const hideBottomNav = hideHeaderFooter || isCheckout || isCarromsGame;
+  const hideBottomPadding = isCheckout || isCarromsGame;
 
   return (
-    <div className={`min-h-screen flex flex-col bg-white text-gray-900 font-sans antialiased ${isCheckout ? 'pb-0' : 'pb-16 lg:pb-0'}`}>
-      {!hideHeaderFooter && <Navbar />}
-      <main className="flex-1">
+    <div className={`min-h-screen flex flex-col bg-white text-gray-900 font-sans antialiased ${hideBottomPadding ? 'pb-0' : 'pb-16 lg:pb-0'} ${isCarromsGame ? 'h-screen w-screen overflow-hidden' : ''}`}>
+      {!hideHeaderFooter && <Navbar className={isLoginPage ? 'hidden lg:block' : ''} />}
+      <main className={`flex-1 flex flex-col ${isCarromsGame ? 'h-full w-full overflow-hidden' : ''}`}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/shop" element={<Shop />} />
@@ -87,7 +94,21 @@ const AppLayout: React.FC = () => {
           <Route path="/catchthegift" element={<CatchtheGift />} />
           <Route path="/spin-and-win" element={<SpinandWin />} />
           <Route path="/spinandwin" element={<SpinandWin />} />
+          <Route path="/carroms" element={<Carroms />} />
+          <Route path="/carrom" element={<Carroms />} />
           <Route path="/admin-login" element={<AdminLogin />} />
+          <Route
+            path="/admin-dashboard/reports"
+            element={
+              <AdminProtectedRoute>
+                <ReportsAnalytics />
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin-dashboard/analytics"
+            element={<Navigate to="/admin-dashboard/reports" />}
+          />
           <Route
             path="/admin-dashboard"
             element={

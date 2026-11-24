@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { trackEvent } from '../utils/analyticsTracker';
 import { useToast } from '../context/ToastContext';
 import { Order, ShippingAddress, CartItem } from '../types';
 import { fetchAddressByPincode } from '../utils/pincode';
@@ -48,7 +49,63 @@ export interface SavedAddress {
   city: string;
   state: string;
   pincode: string;
+  houseNo?: string;
+  roadArea?: string;
+  landmark?: string;
 }
+
+export const INDIAN_STATES = [
+  'Andaman and Nicobar Islands',
+  'Andhra Pradesh',
+  'Arunachal Pradesh',
+  'Assam',
+  'Bihar',
+  'Chandigarh',
+  'Chhattisgarh',
+  'Dadra and Nagar Haveli and Daman and Diu',
+  'Delhi',
+  'Goa',
+  'Gujarat',
+  'Haryana',
+  'Himachal Pradesh',
+  'Jammu and Kashmir',
+  'Jharkhand',
+  'Karnataka',
+  'Kerala',
+  'Ladakh',
+  'Lakshadweep',
+  'Madhya Pradesh',
+  'Maharashtra',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Odisha',
+  'Puducherry',
+  'Punjab',
+  'Rajasthan',
+  'Sikkim',
+  'Tamil Nadu',
+  'Telangana',
+  'Tripura',
+  'Uttar Pradesh',
+  'Uttarakhand',
+  'West Bengal',
+];
+
+export const buildFullAddress = (
+  houseNo?: string,
+  roadArea?: string,
+  landmark?: string,
+  fallbackAddress?: string
+) => {
+  const parts: string[] = [];
+  if (houseNo?.trim()) parts.push(houseNo.trim());
+  if (roadArea?.trim()) parts.push(roadArea.trim());
+  if (landmark?.trim()) parts.push(`(Near: ${landmark.trim()})`);
+  if (parts.length > 0) return parts.join(', ');
+  return fallbackAddress?.trim() || '';
+};
 
 export const Checkout: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -105,6 +162,9 @@ export const Checkout: React.FC = () => {
     fullName: user?.name || '',
     email: user?.email || '',
     phone: user?.phone || '',
+    houseNo: (user as any)?.houseNo || '',
+    roadArea: (user as any)?.roadArea || '',
+    landmark: (user as any)?.landmark || '',
     address: user?.address || '',
     city: user?.city || '',
     state: user?.state || '',
@@ -173,6 +233,9 @@ export const Checkout: React.FC = () => {
             fullName: prev.fullName || user.name || user.username || '',
             email: prev.email || user.email || (user.username?.includes('@') ? user.username : ''),
             phone: prev.phone || user.phone || '',
+            houseNo: prev.houseNo || (user as any)?.houseNo || '',
+            roadArea: prev.roadArea || (user as any)?.roadArea || '',
+            landmark: prev.landmark || (user as any)?.landmark || '',
             address: prev.address || user.address || '',
             city: prev.city || user.city || '',
             state: prev.state || user.state || '',
@@ -194,13 +257,16 @@ export const Checkout: React.FC = () => {
       const found = savedAddresses.find((a) => (a.id || a._id) === selectedAddressId);
       if (found) {
         setFormData({
-          fullName: found.fullName,
-          email: found.email,
-          phone: found.phone,
-          address: found.address,
-          city: found.city,
-          state: found.state,
-          pincode: found.pincode,
+          fullName: found.fullName || '',
+          email: found.email || '',
+          phone: found.phone || '',
+          houseNo: found.houseNo || '',
+          roadArea: found.roadArea || '',
+          landmark: found.landmark || '',
+          address: found.address || '',
+          city: found.city || '',
+          state: found.state || '',
+          pincode: found.pincode || '',
         });
         setIsAddingNewAddress(false);
       }
@@ -230,17 +296,33 @@ export const Checkout: React.FC = () => {
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     if (name === 'phone') {
       const digitsOnly = value.replace(/\D/g, '').slice(0, 10);
       setFormData((prev) => ({ ...prev, phone: digitsOnly }));
       return;
     }
-    setFormData((prev) => ({ ...prev, [name]: value }));
     if (name === 'pincode') {
-      handlePincodeLookup(value);
+      const digitsOnly = value.replace(/\D/g, '').slice(0, 6);
+      setFormData((prev) => ({ ...prev, pincode: digitsOnly }));
+      if (digitsOnly.length === 6) {
+        handlePincodeLookup(digitsOnly);
+      } else {
+        setPincodeBadge(null);
+      }
+      return;
     }
+    setFormData((prev) => {
+      const updated = { ...prev, [name]: value };
+      const computedAddress = buildFullAddress(
+        name === 'houseNo' ? value : updated.houseNo,
+        name === 'roadArea' ? value : updated.roadArea,
+        name === 'landmark' ? value : updated.landmark,
+        updated.address
+      );
+      return { ...updated, address: computedAddress || updated.address };
+    });
   };
 
   // Delete saved address
@@ -266,53 +348,129 @@ export const Checkout: React.FC = () => {
     e.preventDefault();
     if (!editingAddress) return;
 
-    if (editingAddress.phone.replace(/\D/g, '').length !== 10) {
-      addToast('Invalid Phone Number', 'Please enter a valid 10-digit mobile number.', 'error');
+    if (!editingAddress.fullName?.trim()) {
+      addToast('Missing Full Name', 'Please enter your full name.', 'error');
       return;
     }
 
+    const cleanPhone = editingAddress.phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      addToast('Invalid Contact Number', 'Please enter a valid 10-digit mobile number.', 'error');
+      return;
+    }
+
+    if (!editingAddress.houseNo?.trim() && !editingAddress.address?.trim()) {
+      addToast('Missing House No. / Building', 'Please enter your house number or nearest building name.', 'error');
+      return;
+    }
+
+    if (!editingAddress.roadArea?.trim() && !editingAddress.address?.trim()) {
+      addToast('Missing Road / Area', 'Please enter your road name, area, or colony.', 'error');
+      return;
+    }
+
+    const cleanPincode = editingAddress.pincode.replace(/\D/g, '');
+    if (cleanPincode.length !== 6) {
+      addToast('Invalid Pincode', 'Please enter a valid 6-digit pincode.', 'error');
+      return;
+    }
+
+    if (!editingAddress.city?.trim()) {
+      addToast('Missing City', 'Please enter a valid city name.', 'error');
+      return;
+    }
+
+    if (!editingAddress.state?.trim()) {
+      addToast('Missing State', 'Please select your state from the dropdown.', 'error');
+      return;
+    }
+
+    const fullAddr = buildFullAddress(
+      editingAddress.houseNo,
+      editingAddress.roadArea,
+      editingAddress.landmark,
+      editingAddress.address
+    );
+
+    const emailVal = editingAddress.email?.trim() || user?.email || `${cleanPhone}@guest.chokkustore.com`;
+
     await addSavedAddress({
-      fullName: editingAddress.fullName,
-      email: editingAddress.email,
-      phone: editingAddress.phone,
-      address: editingAddress.address,
-      city: editingAddress.city,
-      state: editingAddress.state,
-      pincode: editingAddress.pincode,
+      fullName: editingAddress.fullName.trim(),
+      email: emailVal,
+      phone: cleanPhone,
+      address: fullAddr,
+      city: editingAddress.city.trim(),
+      state: editingAddress.state.trim(),
+      pincode: cleanPincode,
+      houseNo: editingAddress.houseNo?.trim() || '',
+      roadArea: editingAddress.roadArea?.trim() || '',
+      landmark: editingAddress.landmark?.trim() || '',
     });
     setEditingAddress(null);
 
     if (selectedAddressId === editingAddress.id || selectedAddressId === editingAddress._id) {
       setFormData({
-        fullName: editingAddress.fullName,
-        email: editingAddress.email,
-        phone: editingAddress.phone,
-        address: editingAddress.address,
-        city: editingAddress.city,
-        state: editingAddress.state,
-        pincode: editingAddress.pincode,
+        fullName: editingAddress.fullName.trim(),
+        email: emailVal,
+        phone: cleanPhone,
+        address: fullAddr,
+        city: editingAddress.city.trim(),
+        state: editingAddress.state.trim(),
+        pincode: cleanPincode,
+        houseNo: editingAddress.houseNo?.trim() || '',
+        roadArea: editingAddress.roadArea?.trim() || '',
+        landmark: editingAddress.landmark?.trim() || '',
       });
     }
   };
 
   // Save new address from the form
   const handleSaveNewAddressAndSelect = async () => {
-    if (!formData.fullName || !formData.email || !formData.phone || !formData.address || !formData.pincode) {
-      addToast('Incomplete Address', 'Please fill in all address fields before saving.', 'error');
+    if (!formData.fullName.trim()) {
+      addToast('Missing Full Name', 'Please enter your full name.', 'error');
       return;
     }
-    if (formData.phone.replace(/\D/g, '').length !== 10) {
-      addToast('Invalid Phone Number', 'Please enter a valid 10-digit mobile number.', 'error');
+    const cleanPhone = formData.phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      addToast('Invalid Contact Number', 'Please enter a valid 10-digit mobile number.', 'error');
       return;
     }
+    if (!formData.houseNo?.trim() && !formData.address.trim()) {
+      addToast('Missing House No. / Building', 'Please enter your house number or nearest building name.', 'error');
+      return;
+    }
+    if (!formData.roadArea?.trim() && !formData.address.trim()) {
+      addToast('Missing Road / Area', 'Please enter your road name, area, or colony.', 'error');
+      return;
+    }
+    const cleanPin = formData.pincode.replace(/\D/g, '');
+    if (cleanPin.length !== 6) {
+      addToast('Invalid Pincode', 'Please enter a valid 6-digit pincode.', 'error');
+      return;
+    }
+    if (!formData.city.trim()) {
+      addToast('Missing City', 'Please enter a valid city name.', 'error');
+      return;
+    }
+    if (!formData.state.trim()) {
+      addToast('Missing State', 'Please select your state from the dropdown.', 'error');
+      return;
+    }
+
+    const fullAddr = buildFullAddress(formData.houseNo, formData.roadArea, formData.landmark, formData.address);
+    const emailVal = formData.email.trim() || user?.email || `${cleanPhone}@guest.chokkustore.com`;
+
     const res = await addSavedAddress({
-      fullName: formData.fullName,
-      email: formData.email,
-      phone: formData.phone,
-      address: formData.address,
-      city: formData.city,
-      state: formData.state,
-      pincode: formData.pincode,
+      fullName: formData.fullName.trim(),
+      email: emailVal,
+      phone: cleanPhone,
+      address: fullAddr,
+      city: formData.city.trim(),
+      state: formData.state.trim(),
+      pincode: cleanPin,
+      houseNo: formData.houseNo?.trim() || '',
+      roadArea: formData.roadArea?.trim() || '',
+      landmark: formData.landmark?.trim() || '',
     });
     if (res.success && res.addresses && res.addresses.length > 0) {
       const latest = res.addresses[res.addresses.length - 1];
@@ -414,17 +572,62 @@ export const Checkout: React.FC = () => {
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.fullName || !formData.email || !formData.phone || !formData.address || !formData.city || !formData.pincode) {
-      addToast('Incomplete Address', 'Please fill in all required shipping and contact details.', 'error');
+    if (!formData.fullName.trim()) {
+      addToast('Missing Full Name', 'Please enter your full name.', 'error');
       setIsAddingNewAddress(true);
       return;
     }
 
-    if (formData.phone.replace(/\D/g, '').length !== 10) {
-      addToast('Invalid Phone Number', 'Please enter a valid 10-digit mobile number.', 'error');
+    const cleanPhone = formData.phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      addToast('Invalid Contact Number', 'Please enter a valid 10-digit mobile number.', 'error');
       setIsAddingNewAddress(true);
       return;
     }
+
+    if (!formData.houseNo?.trim() && !formData.address.trim()) {
+      addToast('Missing House No. / Building', 'Please enter your house number or nearest building name.', 'error');
+      setIsAddingNewAddress(true);
+      return;
+    }
+
+    if (!formData.roadArea?.trim() && !formData.address.trim()) {
+      addToast('Missing Road / Area', 'Please enter your road name, area, or colony.', 'error');
+      setIsAddingNewAddress(true);
+      return;
+    }
+
+    const cleanPincode = formData.pincode.replace(/\D/g, '');
+    if (cleanPincode.length !== 6) {
+      addToast('Invalid Pincode', 'Please enter a valid 6-digit pincode.', 'error');
+      setIsAddingNewAddress(true);
+      return;
+    }
+
+    if (!formData.city.trim()) {
+      addToast('Missing City', 'Please enter a valid city name.', 'error');
+      setIsAddingNewAddress(true);
+      return;
+    }
+
+    if (!formData.state.trim()) {
+      addToast('Missing State', 'Please select your state from the dropdown.', 'error');
+      setIsAddingNewAddress(true);
+      return;
+    }
+
+    const finalFullAddress = buildFullAddress(
+      formData.houseNo,
+      formData.roadArea,
+      formData.landmark,
+      formData.address
+    );
+    const finalEmail = formData.email.trim() || user?.email || `${cleanPhone}@guest.chokkustore.com`;
+
+    formData.address = finalFullAddress;
+    formData.phone = cleanPhone;
+    formData.email = finalEmail;
+    formData.pincode = cleanPincode;
 
     if (paymentMethod === 'cod' && !isCodSupported) {
       addToast('Payment Error', 'Cash on Delivery is not available for the selected product.', 'error');
@@ -750,14 +953,14 @@ export const Checkout: React.FC = () => {
             {isBuyNow && cartItems.length > 0 && (
               <Link
                 to="/checkout"
-                className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-brand-blue hover:underline bg-white px-2.5 py-1 rounded-full border border-brand-blue/20"
+                className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline"
               >
                 <ShoppingBag className="w-3.5 h-3.5" />
                 <span>Switch to Cart ({cartItems.length})</span>
               </Link>
             )}
-            <div className="flex items-center gap-1 text-[11px] sm:text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2.5 sm:px-3 py-1 rounded-full">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#64A901]" />
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+              <ShieldCheck className="w-4 h-4 text-[#64A901]" />
               <span>100% Secure Checkout</span>
             </div>
           </div>
@@ -768,15 +971,16 @@ export const Checkout: React.FC = () => {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Checkout</h1>
-              {isBuyNow ? (
-                <span className="inline-flex items-center gap-1 text-[11px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300 px-2.5 py-0.5 rounded-full shadow-2xs">
-                  <Zap className="w-3 h-3 text-amber-600 fill-amber-500" />
+              {isBuyNow && (
+                <span className="text-xs sm:text-sm font-semibold text-amber-700 flex items-center gap-1">
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                   <span>Buy Now Checkout</span>
                 </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-[11px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full shadow-2xs">
-                  <ShoppingBag className="w-3 h-3 text-[#64A901]" />
-                  <span>Cart Checkout ({checkoutItems.length} items)</span>
+              )}
+              {!user && (
+                <span className="text-xs sm:text-sm font-semibold text-blue-700 flex items-center gap-1">
+                  {isBuyNow && <span className="text-gray-300 font-normal mr-1">•</span>}
+                  <span>Guest Checkout</span>
                 </span>
               )}
             </div>
@@ -790,7 +994,7 @@ export const Checkout: React.FC = () => {
           {isBuyNow && cartItems.length > 0 && (
             <Link
               to="/checkout"
-              className="sm:hidden text-[11px] font-bold text-brand-blue hover:underline bg-white px-2.5 py-1 rounded-full border border-brand-blue/20 shrink-0"
+              className="sm:hidden text-xs font-semibold text-brand-blue hover:underline shrink-0"
             >
               Cart ({cartItems.length})
             </Link>
@@ -818,9 +1022,11 @@ export const Checkout: React.FC = () => {
                   </p>
                 </div>
               </div>
-              <span className="text-xs font-bold text-[#64A901] bg-[#f2f8eb] px-2.5 py-1 rounded-full border border-[#dbecc7]">
-                Saved ₹{checkoutTotalSavings.toFixed(2)}
-              </span>
+              {checkoutTotalSavings > 0 && (
+                <span className="text-xs font-bold text-[#64A901]">
+                  Saved ₹{checkoutTotalSavings.toFixed(2)}
+                </span>
+              )}
             </div>
 
             {/* Product Items List */}
@@ -948,7 +1154,7 @@ export const Checkout: React.FC = () => {
 
                         {/* Amount Saved Badge */}
                         {itemSaved > 0 && (
-                          <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          <span className="text-xs font-bold text-[#64A901]">
                             Save ₹{itemSaved.toFixed(2)} {percentOff > 0 ? `(${percentOff}% OFF)` : ''}
                           </span>
                         )}
@@ -986,7 +1192,8 @@ export const Checkout: React.FC = () => {
           {/* ========================================================= */}
           {/* SECTION 2: STORE CASH REDEMPTION (BUY NOW & CHECKOUT)     */}
           {/* ========================================================= */}
-          <section className="bg-white rounded-2xl border border-gray-200/90 p-4 sm:p-5 shadow-xs space-y-3.5 transition-all">
+          {Boolean(user) && (
+            <section className="bg-white rounded-2xl border border-gray-200/90 p-4 sm:p-5 shadow-xs space-y-3.5 transition-all">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100 flex-wrap gap-2">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-full bg-[#64A901] text-white font-extrabold flex items-center justify-center text-xs shadow-xs">
@@ -998,16 +1205,16 @@ export const Checkout: React.FC = () => {
                       {isBuyNow ? 'Buy Now Store Cash' : 'Store Cash Redemption'}
                     </h2>
                     {isBuyNow && (
-                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
-                        Buy Now
+                      <span className="text-xs font-semibold text-amber-700">
+                        • Buy Now
                       </span>
                     )}
                   </div>
                   <p className="text-[11px] text-gray-500">Apply your available store cash balance to this order</p>
                 </div>
               </div>
-              <span className="text-[11px] font-extrabold text-[#488710] bg-[#eef8ea] border border-[#d8f2c8] px-2.5 py-1 rounded-full flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-[#64A901]" />
+              <span className="text-[11px] font-semibold text-[#488710] flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 text-[#64A901]" />
                 <span>1,000 Points = ₹1 Store Cash</span>
               </span>
             </div>
@@ -1151,6 +1358,8 @@ export const Checkout: React.FC = () => {
               )}
             </div>
           </section>
+                    
+          )}
 
           {/* ========================================================= */}
           {/* SECTION 3: PRICE DETAILS                                 */}
@@ -1159,7 +1368,7 @@ export const Checkout: React.FC = () => {
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-full bg-[#64A901] text-white font-extrabold flex items-center justify-center text-xs shadow-xs">
-                  3
+                  {user ? 3 : 2}
                 </div>
                 <div>
                   <h2 className="text-base font-extrabold text-gray-900">Price Details</h2>
@@ -1238,7 +1447,7 @@ export const Checkout: React.FC = () => {
                 </span>
                 <span>
                   {checkoutDeliveryFee === 0 ? (
-                    <span className="font-extrabold text-[#64A901] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 text-xs">
+                    <span className="font-extrabold text-[#64A901] text-xs">
                       FREE
                     </span>
                   ) : (
@@ -1282,19 +1491,6 @@ export const Checkout: React.FC = () => {
               </div>
             </div>
 
-            {/* Savings Banner */}
-            {checkoutTotalSavings > 0 && (
-              <div className="bg-[#f0f9e8] border border-[#d2ea9d] rounded-xl px-3.5 py-2.5 flex items-center justify-between text-xs text-emerald-900">
-                <span className="font-extrabold flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-[#64A901] shrink-0" />
-                  <span>You are saving ₹{checkoutTotalSavings.toFixed(2)} on this order!</span>
-                </span>
-                <span className="text-[10px] font-extrabold text-[#64A901] bg-white px-2 py-0.5 rounded-md border border-[#c4e48f]">
-                  Best Price
-                </span>
-              </div>
-            )}
-
             {/* Coupon Code Input Box */}
             <div className="pt-2 border-t border-gray-100">
               <div className="flex items-center gap-2">
@@ -1316,27 +1512,6 @@ export const Checkout: React.FC = () => {
                   {isApplyingCoupon ? 'Applying...' : 'Apply'}
                 </button>
               </div>
-
-              {/* Quick Coupon Chips */}
-              {!couponCode && (
-                <div className="mt-2 flex items-center gap-1.5 flex-wrap text-[11px] text-gray-500">
-                  <span>Available:</span>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyCouponCode('SAVE10')}
-                    className="font-bold text-[#64A901] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
-                  >
-                    SAVE10 (10% off)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyCouponCode('WELCOME20')}
-                    className="font-bold text-[#64A901] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
-                  >
-                    WELCOME20 (20% off)
-                  </button>
-                </div>
-              )}
             </div>
           </section>
 
@@ -1347,7 +1522,7 @@ export const Checkout: React.FC = () => {
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-full bg-[#64A901] text-white font-extrabold flex items-center justify-center text-xs shadow-xs">
-                  4
+                  {user ? 4 : 3}
                 </div>
                 <div>
                   <h2 className="text-base font-extrabold text-gray-900">Delivery Address</h2>
@@ -1395,15 +1570,23 @@ export const Checkout: React.FC = () => {
                     <span className="font-extrabold text-xs sm:text-sm text-gray-900">
                       {formData.fullName}
                     </span>
-                    <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.2 rounded-full">
-                      DELIVER HERE
+                    <span className="text-[11px] font-bold text-emerald-700">
+                      • Deliver Here
                     </span>
                   </div>
 
                   <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                    {formData.address}, {formData.city}, {formData.state} -{' '}
-                    <span className="font-bold text-gray-800">{formData.pincode}</span>
+                    {formData.houseNo ? `${formData.houseNo}, ${formData.roadArea || ''}` : formData.address}
+                    {formData.city ? `, ${formData.city}` : ''}
+                    {formData.state ? `, ${formData.state}` : ''}
+                    {formData.pincode ? ` - ` : ''}
+                    {formData.pincode && <span className="font-bold text-gray-800">{formData.pincode}</span>}
                   </p>
+                  {formData.landmark && (
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      <span className="font-semibold text-gray-600">Landmark:</span> {formData.landmark}
+                    </p>
+                  )}
 
                   <div className="flex items-center gap-3 mt-1.5 text-[11px] text-gray-500 flex-wrap">
                     <span className="flex items-center gap-1">
@@ -1531,10 +1714,10 @@ export const Checkout: React.FC = () => {
 
             {/* Inline Address Entry Form (when adding new or no saved address exists) */}
             {isAddingNewAddress && (
-              <div className="pt-2 border-t border-gray-100 space-y-3">
+              <div className="pt-2 border-t border-gray-100 space-y-3.5">
                 <div className="flex items-center justify-between">
                   <p className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
-                    {savedAddresses.length > 0 ? 'Enter New Delivery Address' : 'Recipient & Shipping Details'}
+                    {savedAddresses.length > 0 ? 'Enter New Delivery Address' : (!user ? 'Delivery Address (Recipient & Contact Details)' : 'Recipient & Shipping Details')}
                   </p>
                   {savedAddresses.length > 0 && (
                     <button
@@ -1552,22 +1735,28 @@ export const Checkout: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {/* 1. Full Name */}
                   <div>
-                    <label className="block font-bold text-gray-700 mb-1">Full Name *</label>
+                    <label className="block font-bold text-gray-700 mb-1">
+                      Full Name *
+                    </label>
                     <input
                       type="text"
                       name="fullName"
                       required
                       value={formData.fullName}
                       onChange={handleInputChange}
-                      placeholder="e.g. Rahul Sharma"
-                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white"
+                      placeholder="Enter your full name"
+                      className="w-full px-3.5 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white transition-colors"
                     />
                   </div>
 
+                  {/* 2. Contact Number */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="block font-bold text-gray-700">Phone Number *</label>
+                      <label className="block font-bold text-gray-700">
+                        Contact Number *
+                      </label>
                       <span className={`text-[10px] font-bold ${formData.phone.length === 10 ? 'text-[#488710]' : 'text-gray-400'}`}>
                         {formData.phone.length}/10 digits
                       </span>
@@ -1581,27 +1770,49 @@ export const Checkout: React.FC = () => {
                       required
                       value={formData.phone}
                       onChange={handleInputChange}
-                      placeholder="10-digit mobile number"
-                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white"
+                      placeholder="Enter your mobile number"
+                      className="w-full px-3.5 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white transition-colors"
                     />
                   </div>
 
+                  {/* 3. House No. / Building Name */}
                   <div>
-                    <label className="block font-bold text-gray-700 mb-1">Email Address *</label>
+                    <label className="block font-bold text-gray-700 mb-1">
+                      House No. / Building Name *
+                    </label>
                     <input
-                      type="email"
-                      name="email"
+                      type="text"
+                      name="houseNo"
                       required
-                      value={formData.email}
+                      value={formData.houseNo || ''}
                       onChange={handleInputChange}
-                      placeholder="name@example.com"
-                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white"
+                      placeholder="Enter your house number or nearest building name"
+                      className="w-full px-3.5 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white transition-colors"
                     />
                   </div>
 
+                  {/* 4. Road Name / Area / Colony */}
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">
+                      Road Name / Area / Colony *
+                    </label>
+                    <input
+                      type="text"
+                      name="roadArea"
+                      required
+                      value={formData.roadArea || ''}
+                      onChange={handleInputChange}
+                      placeholder="Enter your road name, area, or village/city"
+                      className="w-full px-3.5 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white transition-colors"
+                    />
+                  </div>
+
+                  {/* 5. Pincode */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="block font-bold text-gray-700">6-Digit Pincode *</label>
+                      <label className="block font-bold text-gray-700">
+                        Pincode *
+                      </label>
                       {isFetchingPincode && (
                         <span className="text-[10px] font-bold text-[#64A901] flex items-center gap-1">
                           <Loader2 className="w-2.5 h-2.5 animate-spin" /> Verifying...
@@ -1611,56 +1822,73 @@ export const Checkout: React.FC = () => {
                     <input
                       type="text"
                       name="pincode"
-                      required
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       maxLength={6}
+                      required
                       value={formData.pincode}
                       onChange={handleInputChange}
-                      placeholder="6-digit PIN code"
-                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white"
+                      placeholder="Please enter a valid 6-digit pincode"
+                      className="w-full px-3.5 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white transition-colors"
                     />
                     {pincodeBadge && (
                       <p className="mt-1 text-[10px] font-bold text-[#64A901]">{pincodeBadge}</p>
                     )}
                   </div>
 
-                  <div className="sm:col-span-2">
-                    <label className="block font-bold text-gray-700 mb-1">
-                      Street Address / House No. *
-                    </label>
-                    <input
-                      type="text"
-                      name="address"
-                      required
-                      value={formData.address}
-                      onChange={handleInputChange}
-                      placeholder="Flat/House No., Apartment, Street, Landmark"
-                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white"
-                    />
-                  </div>
-
+                  {/* 6. City */}
                   <div>
-                    <label className="block font-bold text-gray-700 mb-1">City *</label>
+                    <label className="block font-bold text-gray-700 mb-1">
+                      City *
+                    </label>
                     <input
                       type="text"
                       name="city"
                       required
                       value={formData.city}
                       onChange={handleInputChange}
-                      placeholder="City"
-                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white"
+                      placeholder="Enter a valid city name"
+                      className="w-full px-3.5 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white transition-colors"
                     />
                   </div>
 
+                  {/* 7. State (Dropdown) */}
                   <div>
-                    <label className="block font-bold text-gray-700 mb-1">State *</label>
+                    <label className="block font-bold text-gray-700 mb-1">
+                      State *
+                    </label>
+                    <div className="relative">
+                      <select
+                        name="state"
+                        required
+                        value={formData.state}
+                        onChange={handleInputChange}
+                        className="w-full px-3.5 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white appearance-none cursor-pointer pr-8 text-gray-800 transition-colors"
+                      >
+                        <option value="">Select State</option>
+                        {INDIAN_STATES.map((st) => (
+                          <option key={st} value={st}>
+                            {st}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  {/* 8. Nearby Famous Place / Shop / School, etc. (Optional) */}
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">
+                      Nearby Famous Place / Shop / School, etc.{' '}
+                      <span className="text-gray-400 font-normal">(Optional)</span>
+                    </label>
                     <input
                       type="text"
-                      name="state"
-                      required
-                      value={formData.state}
+                      name="landmark"
+                      value={formData.landmark || ''}
                       onChange={handleInputChange}
-                      placeholder="State"
-                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white"
+                      placeholder="Enter a nearby landmark for easy delivery identification"
+                      className="w-full px-3.5 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] focus:bg-white transition-colors"
                     />
                   </div>
                 </div>
@@ -1687,15 +1915,15 @@ export const Checkout: React.FC = () => {
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-full bg-[#64A901] text-white font-extrabold flex items-center justify-center text-xs shadow-xs">
-                  5
+                  {user ? 5 : 4}
                 </div>
                 <div>
                   <h2 className="text-base font-extrabold text-gray-900">Payment Method</h2>
                   <p className="text-[11px] text-gray-500">Select how you want to pay</p>
                 </div>
               </div>
-              <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 inline-flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-[#64A901]" />
+              <span className="text-xs font-semibold text-emerald-700 inline-flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#64A901]" />
                 <span>100% Safe</span>
               </span>
             </div>
@@ -1850,7 +2078,7 @@ export const Checkout: React.FC = () => {
                   ₹{checkoutTotalAmount.toFixed(2)}
                 </span>
                 {checkoutTotalSavings > 0 && (
-                  <span className="text-[10px] sm:text-[11px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-[#64A901]">
                     Save ₹{checkoutTotalSavings.toFixed(2)}
                   </span>
                 )}
@@ -1903,6 +2131,7 @@ export const Checkout: React.FC = () => {
 
             <form onSubmit={handleUpdateSavedAddress} className="space-y-3.5 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 1. Full Name */}
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Full Name *</label>
                   <input
@@ -1910,13 +2139,15 @@ export const Checkout: React.FC = () => {
                     required
                     value={editingAddress.fullName}
                     onChange={(e) => setEditingAddress({ ...editingAddress, fullName: e.target.value })}
+                    placeholder="Enter your full name"
                     className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901]"
                   />
                 </div>
 
+                {/* 2. Contact Number */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block font-bold text-gray-700">Phone Number *</label>
+                    <label className="block font-bold text-gray-700">Contact Number *</label>
                     <span className={`text-[10px] font-bold ${editingAddress.phone.length === 10 ? 'text-[#488710]' : 'text-gray-400'}`}>
                       {editingAddress.phone.length}/10 digits
                     </span>
@@ -1932,45 +2163,57 @@ export const Checkout: React.FC = () => {
                       const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
                       setEditingAddress({ ...editingAddress, phone: digitsOnly });
                     }}
-                    placeholder="10-digit mobile number"
+                    placeholder="Enter your mobile number"
                     className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901]"
                   />
                 </div>
 
+                {/* 3. House No. / Building Name */}
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Email Address *</label>
+                  <label className="block font-bold text-gray-700 mb-1">House No. / Building Name *</label>
                   <input
-                    type="email"
+                    type="text"
                     required
-                    value={editingAddress.email}
-                    onChange={(e) => setEditingAddress({ ...editingAddress, email: e.target.value })}
+                    value={editingAddress.houseNo || ''}
+                    onChange={(e) => setEditingAddress({ ...editingAddress, houseNo: e.target.value })}
+                    placeholder="Enter your house number or nearest building name"
                     className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901]"
                   />
                 </div>
 
+                {/* 4. Road Name / Area / Colony */}
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Road Name / Area / Colony *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingAddress.roadArea || ''}
+                    onChange={(e) => setEditingAddress({ ...editingAddress, roadArea: e.target.value })}
+                    placeholder="Enter your road name, area, or village/city"
+                    className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901]"
+                  />
+                </div>
+
+                {/* 5. Pincode */}
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Pincode *</label>
                   <input
                     type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     required
                     maxLength={6}
                     value={editingAddress.pincode}
-                    onChange={(e) => setEditingAddress({ ...editingAddress, pincode: e.target.value })}
+                    onChange={(e) => {
+                      const cleanPin = e.target.value.replace(/\D/g, '').slice(0, 6);
+                      setEditingAddress({ ...editingAddress, pincode: cleanPin });
+                    }}
+                    placeholder="Please enter a valid 6-digit pincode"
                     className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901]"
                   />
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block font-bold text-gray-700 mb-1">Street Address *</label>
-                  <input
-                    type="text"
-                    required
-                    value={editingAddress.address}
-                    onChange={(e) => setEditingAddress({ ...editingAddress, address: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901]"
-                  />
-                </div>
-
+                {/* 6. City */}
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">City *</label>
                   <input
@@ -1978,17 +2221,43 @@ export const Checkout: React.FC = () => {
                     required
                     value={editingAddress.city}
                     onChange={(e) => setEditingAddress({ ...editingAddress, city: e.target.value })}
+                    placeholder="Enter a valid city name"
                     className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901]"
                   />
                 </div>
 
+                {/* 7. State (Dropdown) */}
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">State *</label>
+                  <div className="relative">
+                    <select
+                      required
+                      value={editingAddress.state}
+                      onChange={(e) => setEditingAddress({ ...editingAddress, state: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901] appearance-none cursor-pointer pr-8 text-gray-800"
+                    >
+                      <option value="">Select State</option>
+                      {INDIAN_STATES.map((st) => (
+                        <option key={st} value={st}>
+                          {st}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                </div>
+
+                {/* 8. Nearby Famous Place / Shop / School, etc. (Optional) */}
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">
+                    Nearby Famous Place / Shop / School, etc.{' '}
+                    <span className="text-gray-400 font-normal">(Optional)</span>
+                  </label>
                   <input
                     type="text"
-                    required
-                    value={editingAddress.state}
-                    onChange={(e) => setEditingAddress({ ...editingAddress, state: e.target.value })}
+                    value={editingAddress.landmark || ''}
+                    onChange={(e) => setEditingAddress({ ...editingAddress, landmark: e.target.value })}
+                    placeholder="Enter a nearby landmark for easy delivery identification"
                     className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#64A901]"
                   />
                 </div>
@@ -2004,9 +2273,9 @@ export const Checkout: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#64A901] hover:bg-[#548f01] text-white text-xs font-extrabold rounded-xl transition-all shadow-xs cursor-pointer"
+                  className="px-5 py-2 text-xs font-bold text-white bg-[#64A901] hover:bg-[#548f01] rounded-xl transition-all cursor-pointer shadow-xs"
                 >
-                  Save Address
+                  Save Address Changes
                 </button>
               </div>
             </form>

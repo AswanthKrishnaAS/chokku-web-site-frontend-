@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   LayoutDashboard,
+  BarChart3,
   Users,
   ShoppingBag,
   Package,
@@ -57,6 +58,7 @@ import { useToast } from '../../context/ToastContext';
 import { useGameSettings, GiftBoxRewardConfig } from '../../context/GameSettingsContext';
 import { useSpinGame, SpinSlotConfig, DEFAULT_SPIN_SLOTS, SimulationResult } from '../../context/SpinGameContext';
 import { SpinGameManagement } from './SpinGameManagement';
+import { ReportsAnalytics } from './reports/ReportsAnalytics';
 import { PRODUCTS } from '../../data/products';
 import { CATEGORIES } from '../../data/categories';
 import { Product, Order } from '../../types';
@@ -106,9 +108,24 @@ export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  // Real-time Live Visitors count listener for header Live View button
+  React.useEffect(() => {
+    socket.emit('join_admin_analytics');
+    const handleLiveStats = (stats: any) => {
+      if (stats && typeof stats.onlineVisitors === 'number') {
+        setLiveOnlineCount(stats.onlineVisitors);
+      }
+    };
+    socket.on('analytics_live_stats', handleLiveStats);
+    return () => {
+      socket.off('analytics_live_stats', handleLiveStats);
+    };
+  }, []);
+
   // Selected Section
+  const [liveOnlineCount, setLiveOnlineCount] = useState(0);
   const [activeSection, setActiveSection] = useState<
-    'dashboard' | 'customers' | 'products' | 'orders' | 'categories' | 'payments' | 'settings' | 'website-settings' | 'home-slider' | 'catch-the-gift-settings' | 'catch-the-gift-scores' | 'spin-and-win-settings'
+    'dashboard' | 'reports' | 'customers' | 'products' | 'orders' | 'categories' | 'payments' | 'settings' | 'website-settings' | 'home-slider' | 'catch-the-gift-settings' | 'catch-the-gift-scores' | 'spin-and-win-settings'
   >('dashboard');
 
   // Sidebar Game dropdown state
@@ -131,6 +148,7 @@ export const AdminDashboard: React.FC = () => {
 
   // Catch the Gift Game Settings Form States
   const [gameGiftCount, setGameGiftCount] = useState(catchTheGiftSettings.giftCount || 5);
+  const [gameDailyPlayLimit, setGameDailyPlayLimit] = useState(catchTheGiftSettings.dailyPlayLimit || 1);
   const [gameCoinCount, setGameCoinCount] = useState(catchTheGiftSettings.coinCount || 10);
   const [gamePointsPerCoin, setGamePointsPerCoin] = useState(catchTheGiftSettings.pointsPerCoin || 10);
   const [gameBombCount, setGameBombCount] = useState(catchTheGiftSettings.bombCount || 3);
@@ -157,6 +175,7 @@ export const AdminDashboard: React.FC = () => {
 
   React.useEffect(() => {
     setGameGiftCount(catchTheGiftSettings.giftCount || 5);
+    setGameDailyPlayLimit(catchTheGiftSettings.dailyPlayLimit || 1);
     setGameCoinCount(catchTheGiftSettings.coinCount || 10);
     setGamePointsPerCoin(catchTheGiftSettings.pointsPerCoin || 10);
     setGameBombCount(catchTheGiftSettings.bombCount || 3);
@@ -268,6 +287,7 @@ export const AdminDashboard: React.FC = () => {
     const res = await createCatchTheGiftSettings({
       giftCount: Number(gameGiftCount) || 5,
       giftBoxCount: Number(gameGiftCount) || 5,
+      dailyPlayLimit: Number(gameDailyPlayLimit) || 1,
       coinCount: Number(gameCoinCount) || 10,
       pointsPerCoin: Number(gamePointsPerCoin) || 10,
       bombCount: Number(gameBombCount) || 3,
@@ -290,6 +310,7 @@ export const AdminDashboard: React.FC = () => {
     const res = await updateCatchTheGiftSettings({
       giftCount: Number(gameGiftCount) || 5,
       giftBoxCount: Number(gameGiftCount) || 5,
+      dailyPlayLimit: Number(gameDailyPlayLimit) || 1,
       coinCount: Number(gameCoinCount) || 10,
       pointsPerCoin: Number(gamePointsPerCoin) || 10,
       bombCount: Number(gameBombCount) || 3,
@@ -309,6 +330,7 @@ export const AdminDashboard: React.FC = () => {
 
   const handleResetGameSettings = () => {
     resetCatchTheGiftSettings();
+    setGameDailyPlayLimit(1);
     addToast('Reset to Defaults', 'Game settings restored to standard values.', 'info');
   };
 
@@ -342,7 +364,11 @@ export const AdminDashboard: React.FC = () => {
           'spin-and-win-settings',
         ].includes(section)
       ) {
-        setActiveSection(section as any);
+        if (section === 'reports-analytics' || section === 'analytics') {
+          setActiveSection('reports');
+        } else {
+          setActiveSection(section as any);
+        }
       }
     } catch (e) {}
   }, [searchParams]);
@@ -1101,6 +1127,7 @@ export const AdminDashboard: React.FC = () => {
   // ------------------- STORE PRODUCTS STATE & HANDLERS -------------------
   const [prodEditId, setProdEditId] = useState<string | null>(null);
   const [prodName, setProdName] = useState('');
+  const [prodDescription, setProdDescription] = useState('');
   const [prodCategory, setProdCategory] = useState('');
   const [prodStock, setProdStock] = useState<number>(10);
   const [prodOriginalPrice, setProdOriginalPrice] = useState<string>('99.99');
@@ -1218,6 +1245,7 @@ export const AdminDashboard: React.FC = () => {
 
   const navMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
     { id: 'customers', label: 'Customers', icon: Users, badge: registeredCustomersList.length.toString() },
     { id: 'home-slider', label: 'Homepage Slider', icon: Sliders, badge: activeSlides.length.toString() },
     { id: 'products', label: 'Products', icon: Package, badge: storeProducts.length.toString() },
@@ -1274,6 +1302,31 @@ export const AdminDashboard: React.FC = () => {
           {/* Right Action Icons & Admin Profile */}
           <div className="flex items-center gap-3">
             
+            {/* Live View Header Button */}
+            <button
+              onClick={() => {
+                setActiveSection('reports');
+                navigate('/admin-dashboard?section=reports');
+              }}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                activeSection === 'reports'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300 shadow-2xs font-extrabold'
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-[#f0f9e8] hover:text-[#488710] hover:border-[#d2ea9d]'
+              }`}
+              title="Real-Time Live View & Visitor Analytics"
+            >
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <span>Live View</span>
+              {liveOnlineCount > 0 && (
+                <span className="text-[10px] font-black px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800">
+                  {liveOnlineCount}
+                </span>
+              )}
+            </button>
+
             {/* View User Website Link */}
             <button
               onClick={() => navigate('/')}
@@ -1584,7 +1637,14 @@ export const AdminDashboard: React.FC = () => {
         {/* ================= MAIN DASHBOARD CONTENT AREA ================= */}
         <main className="flex-1 min-w-0 h-full p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto">
           
-          {/* ================= SUMMARY STATISTIC CARDS (4 METRICS) ================= */}
+          {/* ================= SECTION: REPORTS & ANALYTICS ================= */}
+          {activeSection === 'reports' && (
+            <ReportsAnalytics embedded={true} />
+          )}
+
+          {activeSection !== 'reports' && (
+            <div>
+              {/* ================= SUMMARY STATISTIC CARDS (4 METRICS) ================= */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             
             {/* Stat 1: Total Customers */}
@@ -1654,6 +1714,8 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
           </div>
+            </div>
+          )}
 
           {/* ================= SECTION 1: DASHBOARD OVERVIEW ================= */}
           {activeSection === 'dashboard' && (
@@ -3023,6 +3085,8 @@ export const AdminDashboard: React.FC = () => {
                               className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl font-bold text-gray-900 focus:outline-none focus:border-purple-500 cursor-pointer"
                             >
                               <option value="/catch-the-gift">🎁 Catch the Gift Game (/catch-the-gift)</option>
+                              <option value="/spin-and-win">🎡 Spin and Win (/spin-and-win)</option>
+                              <option value="/carroms">🎯 Carroms Game (/carroms)</option>
                               <option value="/play-and-win">🕹️ Play & Win Hub (/play-and-win)</option>
                               <option value="/points">⭐ Points & Rewards (/points)</option>
                             </select>
@@ -3218,25 +3282,48 @@ export const AdminDashboard: React.FC = () => {
                 {/* Section 1: Item Quantities & Rules */}
                 <div className="space-y-6">
                   
-                  {/* Game Duration */}
-                  <div className="space-y-2 bg-purple-50/50 p-4 sm:p-5 rounded-2xl border border-purple-100 max-w-md">
-                    <label className="text-xs font-black text-gray-800 flex items-center justify-between">
-                      <span>⏱️ Game Duration (seconds)</span>
-                      <span className="text-[10px] text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-full font-bold">Timer</span>
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min="5"
-                        max="300"
-                        value={gameDurationVal}
-                        onChange={(e) => setGameDurationVal(Math.max(5, parseInt(e.target.value) || 0))}
-                        className="w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                        required
-                      />
-                      <span className="text-xs font-bold text-purple-900 bg-purple-100 px-3 py-2.5 rounded-xl shrink-0">seconds</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-3xl">
+                    {/* Game Duration */}
+                    <div className="space-y-2 bg-purple-50/50 p-4 sm:p-5 rounded-2xl border border-purple-100">
+                      <label className="text-xs font-black text-gray-800 flex items-center justify-between">
+                        <span>⏱️ Game Duration (seconds)</span>
+                        <span className="text-[10px] text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-full font-bold">Timer</span>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="5"
+                          max="300"
+                          value={gameDurationVal}
+                          onChange={(e) => setGameDurationVal(Math.max(5, parseInt(e.target.value) || 0))}
+                          className="w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                          required
+                        />
+                        <span className="text-xs font-bold text-purple-900 bg-purple-100 px-3 py-2.5 rounded-xl shrink-0">seconds</span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 font-medium">Default duration: 25 seconds.</p>
                     </div>
-                    <p className="text-[11px] text-gray-500 font-medium">Default duration: 25 seconds.</p>
+
+                    {/* Daily Play Limit */}
+                    <div className="space-y-2 bg-blue-50/50 p-4 sm:p-5 rounded-2xl border border-blue-100">
+                      <label className="text-xs font-black text-gray-800 flex items-center justify-between">
+                        <span>🎮 Daily Play Limit (24-Hour Period)</span>
+                        <span className="text-[10px] text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full font-bold">Plays / 24h</span>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={gameDailyPlayLimit}
+                          onChange={(e) => setGameDailyPlayLimit(Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                          required
+                        />
+                        <span className="text-xs font-bold text-blue-900 bg-blue-100 px-3 py-2.5 rounded-xl shrink-0">plays</span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 font-medium">Controls the maximum number of attempts a user can make within a 24-hour period.</p>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5">

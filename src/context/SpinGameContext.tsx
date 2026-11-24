@@ -194,6 +194,9 @@ interface SpinGameContextType {
     alreadySpun?: boolean;
     isDuplicateReplay?: boolean;
     remainingMs?: number;
+    spinsUsed?: number;
+    maxSpins?: number;
+    spinsRemaining?: number;
     message: string;
     error?: string;
   }>;
@@ -353,6 +356,9 @@ export const SpinGameProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           availableRupees: res.data.availableRupees || 0,
           walletBalance: res.data.walletBalance || 0,
           isDuplicateReplay: res.data.isDuplicateReplay || false,
+          spinsUsed: res.data.spinsUsed,
+          maxSpins: res.data.maxSpins,
+          spinsRemaining: res.data.spinsRemaining,
           message: res.data.message || 'Spin confirmed by backend',
         };
       }
@@ -363,6 +369,9 @@ export const SpinGameProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           success: false,
           alreadySpun: !!res.data?.alreadySpun,
           remainingMs: res.data?.remainingMs,
+          spinsUsed: res.data?.spinsUsed,
+          maxSpins: res.data?.maxSpins,
+          spinsRemaining: res.data?.spinsRemaining ?? 0,
           message: res.data?.message || 'Daily free spin already claimed! Please try again tomorrow.',
           error: res.data?.message || 'Daily free spin cooldown active',
         };

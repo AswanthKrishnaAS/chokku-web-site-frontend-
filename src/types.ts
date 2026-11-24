@@ -97,6 +97,9 @@ export interface ShippingAddress {
   city: string;
   state: string;
   pincode: string;
+  houseNo?: string;
+  roadArea?: string;
+  landmark?: string;
 }
 
 export interface SavedAddress {
@@ -111,6 +114,9 @@ export interface SavedAddress {
   city: string;
   state: string;
   pincode: string;
+  houseNo?: string;
+  roadArea?: string;
+  landmark?: string;
 }
 
 export interface Order {

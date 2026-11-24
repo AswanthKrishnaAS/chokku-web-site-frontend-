@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useToast } from './ToastContext';
 import { PRODUCTS } from '../data/products';
+import { trackEvent } from '../utils/analyticsTracker';
 
 interface WishlistContextType {
   wishlistIds: string[];
-  toggleWishlist: (productId: string) => void;
+  toggleWishlist: (productId: string, nameOverride?: string) => void;
   isInWishlist: (productId: string) => boolean;
   wishlistCount: number;
 }
@@ -51,9 +52,19 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setWishlistIds((prev) => {
       if (prev.includes(productId)) {
         addToast('Removed from Wishlist', `${productName} removed from your saved items.`, 'info');
+        trackEvent({
+          eventType: 'wishlist_remove',
+          productId,
+          productName,
+        });
         return prev.filter((id) => id !== productId);
       } else {
         addToast('Saved to Wishlist', `${productName} added to your wishlist.`, 'success');
+        trackEvent({
+          eventType: 'wishlist_add',
+          productId,
+          productName,
+        });
         return [...prev, productId];
       }
     });

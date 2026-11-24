@@ -20,7 +20,6 @@ import { useWebsiteSettings } from '../context/WebsiteSettingsContext';
 import { useCategories } from '../context/CategoryContext';
 import { useProducts } from '../context/ProductContext';
 import { useServerStatus } from '../context/ServerStatusContext';
-import { TreasureCoin } from '../components/TreasureCoin';
 import serverImg from '../assets/img/server.png';
 
 export const Home: React.FC = () => {
@@ -118,7 +117,7 @@ export const Home: React.FC = () => {
 
           {/* Gradient Green Pill Action Button */}
           <button
-            onClick={() => checkServerConnection()}
+            onClick={() => checkServerConnection(true)}
             disabled={isChecking}
             className="w-full max-w-xs inline-flex items-center justify-center gap-2.5 bg-gradient-to-r from-[#488710] to-[#36680c] hover:from-[#3d740d] hover:to-[#2e580a] text-white font-black text-xs sm:text-sm py-3.5 px-6 rounded-full shadow-[0_8px_20px_rgba(72,135,16,0.35)] transition-all duration-200 transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 cursor-pointer uppercase tracking-wider"
           >
@@ -132,7 +131,7 @@ export const Home: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 sm:space-y-12 pb-16 bg-[#fbfdf9] w-full">
+    <div className="space-y-6 sm:space-y-12 pb-16 bg-[#fbfdf9] w-full relative">
       {/* 1. Hero Carousel Banner Container */}
       {slides.length > 0 && (
         <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6">
@@ -170,14 +169,14 @@ export const Home: React.FC = () => {
               <>
                 <button
                   onClick={() => setCurrentSlide((prev) => (prev === 0 ? slides.length - 1 : prev - 1))}
-                  className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/80 hover:bg-white text-gray-800 shadow-md flex items-center justify-center transition-all opacity-70 hover:opacity-100"
+                  className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/80 hover:bg-white text-gray-800 shadow-md flex items-center justify-center transition-all opacity-70 hover:opacity-100 z-30"
                   aria-label="Previous Slide"
                 >
                   <ChevronLeft className="w-5 h-5 text-gray-800" />
                 </button>
                 <button
                   onClick={() => setCurrentSlide((prev) => (prev + 1) % slides.length)}
-                  className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/80 hover:bg-white text-gray-800 shadow-md flex items-center justify-center transition-all opacity-70 hover:opacity-100"
+                  className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/80 hover:bg-white text-gray-800 shadow-md flex items-center justify-center transition-all opacity-70 hover:opacity-100 z-30"
                   aria-label="Next Slide"
                 >
                   <ChevronRight className="w-5 h-5 text-gray-800" />
@@ -468,8 +467,6 @@ export const Home: React.FC = () => {
         </div>
       </section>
 
-      {/* Golden Treasure Coin for Home Page */}
-      <TreasureCoin pageId="home" />
     </div>
   );
 };

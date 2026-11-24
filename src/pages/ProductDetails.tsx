@@ -28,13 +28,14 @@ import {
 } from 'lucide-react';
 import { PRODUCTS } from '../data/products';
 import { useProducts } from '../context/ProductContext';
+import { trackEvent } from '../utils/analyticsTracker';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { ProductCard } from '../components/ProductCard';
 import { Button } from '../components/Button';
 import { useToast } from '../context/ToastContext';
-import { TreasureCoin } from '../components/TreasureCoin';
 import { TryOnModal } from '../components/TryOnModal';
+import { GuestBuyNowModal } from '../components/GuestBuyNowModal';
 import { useAuth } from '../context/AuthContext';
 import { ProductReview } from '../types';
 
@@ -57,6 +58,7 @@ export const ProductDetails: React.FC = () => {
   const [isMoreInfoOpen, setIsMoreInfoOpen] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'highlights' | 'reviews'>('highlights');
   const [isTryOnOpen, setIsTryOnOpen] = useState<boolean>(false);
+  const [isGuestBuyNowModalOpen, setIsGuestBuyNowModalOpen] = useState<boolean>(false);
 
   // Review Filtering, Lightbox & All Reviews Bottom Sheet State
   const [starFilter, setStarFilter] = useState<number | 'all' | 'photos'>('all');
@@ -81,6 +83,7 @@ export const ProductDetails: React.FC = () => {
   React.useEffect(() => {
     if (product) {
       setSelectedImage(product.image);
+      trackEvent({ eventType: 'product_view', productId: product.id, productName: product.name, productPrice: product.price, productImage: product.image, category: product.categoryName || product.category });
       setQuantity(1);
       setIsAllReviewsOpen(false);
       if (product.sizeVariants && product.sizeVariants.length > 0) {
@@ -424,30 +427,29 @@ export const ProductDetails: React.FC = () => {
   const handleBuyNow = () => {
     if (!product) return;
 
+    const curPrice = selectedSizePrice > 0 ? selectedSizePrice : product.price;
+    const curOrigPrice = product.originalPrice && product.originalPrice > curPrice ? product.originalPrice : Math.round(curPrice * 1.25);
+
     const buyItem = {
-      product: activeProductPayload || product,
+      product: {
+        ...(activeProductPayload || product),
+        price: curPrice,
+        originalPrice: curOrigPrice,
+      },
       quantity,
       selectedSize: selectedSize || undefined,
     };
 
     setBuyNowItem(buyItem);
 
-    if (!customerUser) {
-      addToast('Login Required', 'Please log in or sign up to complete your purchase.', 'info');
-      sessionStorage.setItem('chokku_redirect_after_login', '/checkout?mode=buynow');
-      sessionStorage.setItem('chokku_buy_now_product_id', product.id);
-      sessionStorage.setItem('chokku_buy_now_qty', String(quantity));
-      navigate('/login', {
-        state: {
-          returnUrl: '/checkout?mode=buynow',
-          buyNowProductId: product.id,
-          buyNowQuantity: quantity,
-        },
-      });
+    // If user is already signed in, keep the existing purchase flow unchanged
+    if (customerUser) {
+      navigate('/checkout?mode=buynow');
       return;
     }
 
-    navigate('/checkout?mode=buynow');
+    // For guest users, display the Buy Now - Guest User modal
+    setIsGuestBuyNowModalOpen(true);
   };
 
   const handleShare = () => {
@@ -486,25 +488,27 @@ export const ProductDetails: React.FC = () => {
             {/* MOBILE ONLY LAYOUT (< lg): Swipeable Slider + Bottom-Left Fullscreen Icon + Pagination Dots (NO thumbnails) */}
             <div className="block lg:hidden space-y-2.5">
               {/* Mobile Swipe Slider Container */}
-              <div className="relative aspect-square w-full bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+              <div className="relative aspect-square w-full bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm" style={{ touchAction: 'pan-x pan-y' }}>
                 
                 {/* Horizontal Scroll Snap Track */}
                 <div
                   ref={mobileSliderRef}
                   onScroll={handleMobileScroll}
-                  className="flex w-full h-full overflow-x-auto snap-x snap-mandatory scrollbar-none scroll-smooth touch-pan-x"
-                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                  className="flex w-full h-full overflow-x-auto snap-x snap-mandatory scrollbar-none"
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch', touchAction: 'pan-x pan-y', overscrollBehaviorX: 'contain', overscrollBehaviorY: 'auto' }}
                 >
                   {galleryList.map((imgUrl, idx) => (
                     <div
                       key={idx}
                       className="w-full h-full shrink-0 snap-center snap-always flex items-center justify-center p-2 bg-white"
+                      style={{ touchAction: 'pan-x pan-y' }}
                     >
                       <img
                         src={imgUrl}
                         alt={`${product.name} slide ${idx + 1}`}
                         referrerPolicy="no-referrer"
-                        className="w-full h-full object-contain object-center select-none"
+                        draggable={false}
+                        className="w-full h-full object-contain object-center select-none pointer-events-none"
                       />
                     </div>
                   ))}
@@ -1252,8 +1256,6 @@ export const ProductDetails: React.FC = () => {
 
       </div>
 
-      {/* Golden Treasure Coin for Product Details Page */}
-      <TreasureCoin pageId="product" />
 
       {/* Virtual Try-On Modal */}
       <TryOnModal
@@ -1262,6 +1264,22 @@ export const ProductDetails: React.FC = () => {
         product={product}
         selectedProductImage={selectedImage || product.image}
       />
+
+      {/* Guest Buy Now Modal */}
+      {product && (
+        <GuestBuyNowModal
+          isOpen={isGuestBuyNowModalOpen}
+          onClose={() => setIsGuestBuyNowModalOpen(false)}
+          product={activeProductPayload || product}
+          quantity={quantity}
+          selectedSize={selectedSize}
+          activePrice={selectedSizePrice > 0 ? selectedSizePrice : product.price}
+          onSkipToBuy={() => {
+            setIsGuestBuyNowModalOpen(false);
+            navigate('/checkout?mode=buynow');
+          }}
+        />
+      )}
 
       {/* Bottom Off-Canvas Panel for All Reviews */}
       <div

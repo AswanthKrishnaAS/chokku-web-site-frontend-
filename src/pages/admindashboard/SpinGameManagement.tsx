@@ -580,19 +580,21 @@ export const SpinGameManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-gray-700 block mb-1">
-                    Daily Free Spins Per Customer
+                  <label className="text-xs font-bold text-gray-700 block mb-1 flex items-center justify-between">
+                    <span>Daily Play Limit (Attempts per 24-Hour Period)</span>
+                    <span className="text-[10px] text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full font-bold">Plays / 24h</span>
                   </label>
                   <input
                     type="number"
                     min="1"
-                    max="10"
+                    max="100"
                     value={dailyFreeSpins}
                     onChange={(e) => setDailyFreeSpins(Math.max(1, Number(e.target.value) || 1))}
+                    placeholder="e.g. 1"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-xs font-bold focus:border-orange-500 focus:outline-none"
                   />
-                  <span className="text-[10px] text-gray-400 mt-0.5 block">
-                    Default 1 free spin every 24 hours per customer.
+                  <span className="text-[10px] text-gray-500 mt-0.5 block">
+                    Controls the maximum number of times a user can play/spin within a 24-hour period (e.g. 1, 3, or 5 attempts per 24 hours).
                   </span>
                 </div>
 

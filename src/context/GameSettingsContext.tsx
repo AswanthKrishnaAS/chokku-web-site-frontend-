@@ -18,6 +18,7 @@ export interface GiftBoxRewardConfig {
 export interface CatchTheGiftGameSettings {
   giftCount: number;         // Set how many gift boxes should appear in the game (default 5)
   giftBoxCount: number;      // Gift box count (same as giftCount)
+  dailyPlayLimit: number;    // Daily play limit within 24 hours (default 1)
   coinCount: number;         // Set how many coins should appear in gameplay (default 10)
   pointsPerCoin: number;     // Points per coin collected (default 10)
   bombCount: number;         // Set how many bombs should appear in gameplay (default 3)
@@ -32,6 +33,7 @@ export interface CatchTheGiftGameSettings {
 export const DEFAULT_GAME_SETTINGS: CatchTheGiftGameSettings = {
   giftCount: 5,
   giftBoxCount: 5,
+  dailyPlayLimit: 1,
   coinCount: 10,
   pointsPerCoin: 10,
   bombCount: 3,

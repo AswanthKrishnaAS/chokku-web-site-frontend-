@@ -10,9 +10,15 @@ import { CATEGORIES } from '../data/categories';
 import { PRODUCTS } from '../data/products';
 import { Product } from '../types';
 import chokkuLogo from '../assets/img/chokku.png';
+import { MascotRewardModal } from './MascotRewardModal';
 
-export const Navbar: React.FC = () => {
+interface NavbarProps {
+  className?: string;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMascotVisible, setIsMascotVisible] = useState(true);
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,10 +120,10 @@ export const Navbar: React.FC = () => {
   const navCategories = dynamicCategories.length > 0 ? dynamicCategories : CATEGORIES;
 
   return (
-    <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-2xs w-full transition-all">
+    <header className={`sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-2xs w-full transition-all ${className}`}>
       {/* ===== TOP MARQUEE CONTAINER ("Special Welcome Order" / "spacal welocom order") ===== */}
       <div
-        className="w-full bg-gradient-to-r from-[#1c3804] via-[#386b0c] to-[#1c3804] text-white py-1.5 px-3 overflow-hidden shadow-xs border-b border-[#2d5509]/60 relative z-20 group select-none"
+        className="w-full bg-gradient-to-r from-[#1c3804] via-[#386b0c] to-[#1c3804] text-white py-1.5 sm:py-2 px-3 shadow-xs border-b border-[#2d5509]/60 relative z-20 group select-none min-h-[36px] sm:min-h-[42px] flex items-center"
         data-marquee="spacal welocom order"
         data-testid="navbar-marquee-spacal-welocom-order"
         role="region"
@@ -125,7 +131,7 @@ export const Navbar: React.FC = () => {
       >
         <Link
           to="/shop?tag=offers"
-          className="flex overflow-hidden items-center justify-start cursor-pointer transition-opacity hover:opacity-95"
+          className="flex overflow-hidden items-center justify-start cursor-pointer transition-opacity hover:opacity-95 flex-1 pr-14 xs:pr-16 sm:pr-20"
           title="Special Welcome Order - Click to explore exclusive offers"
         >
           <div className="animate-marquee-scroll flex items-center shrink-0">
@@ -226,6 +232,13 @@ export const Navbar: React.FC = () => {
             </div>
           </div>
         </Link>
+        {/* Automated Monkey Mascot & Welcome Reward Experience */}
+        {isMascotVisible && (
+          <MascotRewardModal
+            isOpen={isMascotVisible}
+            onClose={() => setIsMascotVisible(false)}
+          />
+        )}
       </div>
 
       {/* ===== MOBILE HEADER (lg:hidden) matching Image 2 ===== */}

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { CartItem, Product } from '../types';
 import { useToast } from './ToastContext';
+import { trackEvent, notifyCartUpdate } from '../utils/analyticsTracker';
 
 interface CartContextType {
   cartItems: CartItem[];
@@ -148,9 +149,27 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         { confetti: true, showMascot: true }
       );
     }
+
+    // Analytics: track add to cart event and notify socket
+    trackEvent({
+      eventType: 'add_to_cart',
+      productId: product.id,
+      productName: product.name,
+      productPrice: product.price,
+      productImage: product.image,
+      category: product.category,
+      quantity,
+    });
+    notifyCartUpdate(true, cartItems.length + (isExisting ? 0 : 1));
   };
 
   const removeFromCart = (productId: string, color?: string, size?: string) => {
+    trackEvent({
+      eventType: 'remove_from_cart',
+      productId,
+    });
+    notifyCartUpdate(cartItems.length > 1, Math.max(0, cartItems.length - 1));
+
     setCartItems((prev) => {
       const target = prev.find(
         (item) =>
